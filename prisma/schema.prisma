@@ -1,0 +1,494 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth (NextAuth) ──────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Multi-Tenancy ────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rooftops Rooftop[]
+  users    User[]
+}
+
+model Rooftop {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String   @unique
+  // OEM selections stored as JSON array string: e.g. '["GM","Ford"]'
+  oems           String   @default("[]")
+  // Financial config
+  laborRate      Float    @default(125.00)
+  taxRate        Float    @default(0.07)
+  shopSupplyPct  Float    @default(0.08)
+  shopSupplyCap  Float    @default(45.00)
+  currency       String   @default("USD")
+  timezone       String   @default("America/Chicago")
+  // MFA policy: admin can require TOTP for all users on this rooftop
+  mfaRequired    Boolean  @default(false)
+  // DMS integration
+  dmsProvider    String?  // "cdk" | "reynolds" | null
+  dmsConfig      String?  @db.Text // encrypted JSON: { clientId, clientSecret, dealerNumber, ... }
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users           User[]
+  additionalUsers UserRooftop[]
+  repairOrders    RepairOrder[]
+  pricingMatrix   PricingMatrix[]
+  announcements   Announcement[]
+
+  @@index([organizationId])
+}
+
+model User {
+  id             String   @id @default(cuid())
+  name           String?
+  email          String?  @unique
+  emailVerified  DateTime?
+  image          String?
+  hashedPassword String?
+  // role: "admin" | "advisor" | "manager" | "developer"
+  role           String   @default("advisor")
+  organizationId String?
+  rooftopId      String?
+  employeeId     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization        Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  rooftop             Rooftop?      @relation(fields: [rooftopId], references: [id], onDelete: SetNull)
+  accounts            Account[]
+  sessions            Session[]
+  repairOrders        RepairOrder[]
+  roOverrides         ROOverride[]
+  auditLogs           AuditLog[]
+  mfa                 UserMFA?
+  additionalRooftops  UserRooftop[]
+  importBatches       ImportBatch[]
+  roMessages          ROMessage[]   @relation("UserROMessages")
+  announcements       Announcement[] @relation("UserAnnouncements")
+
+  @@unique([rooftopId, employeeId])
+}
+
+// MFA (TOTP) record — one per user, enabledAt null until first successful verify
+model UserMFA {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  secret      String    // TOTP secret (base32, stored encrypted in prod)
+  backupCodes String    @db.Text // JSON array of bcrypt-hashed backup codes
+  enabledAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Junction table for users who need access to multiple rooftops within the same org
+// User.rooftopId remains the primary/default rooftop; this table holds extras
+model UserRooftop {
+  id        String   @id @default(cuid())
+  userId    String
+  rooftopId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rooftop Rooftop @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, rooftopId])
+  @@index([userId])
+}
+
+// ─── VIN & Vehicle ────────────────────────────────────────────────────────────
+
+model VehicleCache {
+  id          String   @id @default(cuid())
+  vin         String   @unique
+  make        String
+  model       String
+  year        Int
+  engine      String?
+  drivetrain  String?
+  trim        String?
+  oem         String?
+  rawData     String   @db.Text // JSON blob from NHTSA
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([vin])
+}
+
+// ─── OEM Rules ────────────────────────────────────────────────────────────────
+
+// One record per OEM + mileage interval combination
+// serviceDefinitions: JSON array of { id, name, category, description, required }
+model MaintenanceSchedule {
+  id                 String   @id @default(cuid())
+  oem                String   // "GM" | "Ford" | ...
+  mileageInterval    Int      // e.g. 5000, 7500, 10000, 15000, 30000, 60000
+  // JSON: [{ id, name, category, description, isRequired, applicableEngines?, applicableDrivetrains? }]
+  serviceDefinitions String   @db.Text
+  notes              String?
+  // Versioning
+  version            Int      @default(1)
+  isActive           Boolean  @default(true)
+  effectiveDate      DateTime @default(now())
+  importBatchId      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([oem, mileageInterval, version])
+  @@index([oem])
+  @@index([oem, isActive])
+}
+
+// Parts catalog with conditional rules
+// conditions: JSON { engines: [], drivetrains: [], trims: [] } — empty = applies to all
+model PartsCatalog {
+  id           String   @id @default(cuid())
+  oem          String
+  partNumber   String
+  name         String
+  description  String?
+  defaultCost  Float    @default(0)
+  // JSON: conditions for applicability, e.g. { "engines": ["6.2L V8"], "drivetrains": ["RWD"] }
+  conditions   String   @default("{}") @db.Text
+  // Which services this part applies to (JSON array of service IDs/names)
+  serviceIds   String   @default("[]") @db.Text
+  quantityRule String   @default("1") // "1", "6" (for quarts), or formula string
+  isKit        Boolean  @default(false)
+  // If isKit=true, bundled part numbers (JSON array)
+  kitParts     String   @default("[]") @db.Text
+  // Versioning
+  version       Int      @default(1)
+  isActive      Boolean  @default(true)
+  effectiveDate DateTime @default(now())
+  importBatchId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([oem, partNumber, version])
+  @@index([oem])
+  @@index([oem, isActive])
+}
+
+// OEM flat-rate labor operations
+model LaborOperation {
+  id            String   @id @default(cuid())
+  oem           String
+  opCode        String
+  name          String
+  description   String?
+  flatRateHours Float
+  // JSON: service IDs this op maps to
+  serviceIds    String   @default("[]") @db.Text
+  conditions    String   @default("{}") @db.Text
+  // Versioning
+  version       Int      @default(1)
+  isActive      Boolean  @default(true)
+  effectiveDate DateTime @default(now())
+  importBatchId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([oem, opCode, version])
+  @@index([oem])
+  @@index([oem, isActive])
+}
+
+// One-Time Parts Recommendations — non-recurring mileage-triggered upsells
+model OTPRRule {
+  id               String   @id @default(cuid())
+  oem              String
+  name             String
+  description      String?
+  serviceCategory  String
+  // Trigger at this mileage (with a ± window applied in code)
+  mileageThreshold Int
+  // Parts to recommend (JSON array of part numbers)
+  partNumbers      String   @default("[]") @db.Text
+  // Urgency: "urgent" | "suggested" | "informational"
+  urgencyTier      String   @default("suggested")
+  conditions       String   @default("{}") @db.Text
+  isActive         Boolean  @default(true)
+  // Versioning
+  version          Int      @default(1)
+  effectiveDate    DateTime @default(now())
+  importBatchId    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([oem, mileageThreshold])
+  @@index([oem, isActive])
+}
+
+// ─── OEM Import Batches ───────────────────────────────────────────────────────
+
+// Tracks each bulk import operation for audit and rollback
+model ImportBatch {
+  id           String   @id @default(cuid())
+  importedById String
+  // "MaintenanceSchedule" | "PartsCatalog" | "LaborOperation" | "OTPRRule"
+  entityType   String
+  recordCount  Int      @default(0)
+  newCount     Int      @default(0)   // records that didn't exist before
+  updatedCount Int      @default(0)   // records that replaced an existing version
+  // "committed" | "rolledBack"
+  status       String   @default("committed")
+  // JSON array of validation/import errors
+  errorLog     String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  importedBy User @relation(fields: [importedById], references: [id])
+
+  @@index([importedById])
+  @@index([entityType, createdAt])
+}
+
+// ─── Pricing ──────────────────────────────────────────────────────────────────
+
+// Per-rooftop tiered parts markup
+// tiers: JSON [{ minCost, maxCost, markupPct }], e.g. [{0, 50, 0.30}, {50, 200, 0.25}, {200, null, 0.20}]
+model PricingMatrix {
+  id         String   @id @default(cuid())
+  rooftopId  String   @unique
+  tiers      String   @db.Text // JSON
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  rooftop Rooftop @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+}
+
+// ─── Repair Orders ────────────────────────────────────────────────────────────
+
+model RepairOrder {
+  id              String   @id @default(cuid())
+  rooftopId       String
+  advisorId       String
+  vin             String
+  // Full decoded vehicle snapshot at time of RO creation
+  vehicleSnapshot String   @db.Text // JSON
+  currentMileage  Int?
+  // status: "draft" | "presented" | "approved" | "closed" | "void"
+  status          String   @default("draft")
+  // Current wizard step: 1-5
+  wizardStep      Int      @default(1)
+  // Calculated totals (updated on each recalculation)
+  partsSubtotal   Float    @default(0)
+  laborSubtotal   Float    @default(0)
+  shopSupplyFee   Float    @default(0)
+  taxAmount       Float    @default(0)
+  totalAmount     Float    @default(0)
+  notes           String?  @db.Text
+  presentedAt     DateTime?
+  closedAt        DateTime?
+  // DMS sync
+  dmsSyncStatus   String?  // "pending" | "synced" | "failed"
+  dmsSyncedAt     DateTime?
+  dmsExternalId   String?  // RO ID assigned by DMS
+  dmsSyncAttempts Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  rooftop    Rooftop       @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  advisor    User          @relation(fields: [advisorId], references: [id])
+  lineItems  ROLineItem[]
+  overrides  ROOverride[]
+  auditLogs  AuditLog[]
+  messages   ROMessage[]
+
+  @@index([rooftopId, status])
+  @@index([advisorId])
+  @@index([vin])
+}
+
+model ROLineItem {
+  id             String   @id @default(cuid())
+  repairOrderId  String
+  // type: "service" | "part" | "labor" | "fee" | "tax"
+  type           String
+  // source: "recommended" | "otpr" | "manual"
+  source         String   @default("recommended")
+  serviceId      String?  // links to service definition
+  partNumber     String?
+  laborOpCode    String?
+  supplier       String?  // "NAPA" | "AutoZone" | "O'Reilly" | "Advance" | "RockAuto" | "OEM" | custom
+  description    String
+  quantity       Float    @default(1)
+  unitCost       Float    @default(0) // cost before markup (parts)
+  unitPrice      Float    @default(0) // after markup / labor rate applied
+  totalPrice     Float    @default(0)
+  isAccepted     Boolean  @default(true) // advisor accepted this item
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  repairOrder RepairOrder  @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  overrides   ROOverride[]
+
+  @@index([repairOrderId])
+}
+
+// Audit trail for advisor manual overrides
+model ROOverride {
+  id             String   @id @default(cuid())
+  repairOrderId  String
+  lineItemId     String?
+  advisorId      String
+  field          String   // "unitPrice" | "quantity" | "description" | etc.
+  oldValue       String?
+  newValue       String?
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  lineItem    ROLineItem? @relation(fields: [lineItemId], references: [id], onDelete: SetNull)
+  advisor     User        @relation(fields: [advisorId], references: [id])
+
+  @@index([repairOrderId])
+}
+
+// ─── Document Ingest ──────────────────────────────────────────────────────────
+
+model IngestDocument {
+  id            String   @id @default(cuid())
+  rooftopId     String
+  uploadedById  String
+  blobUrl       String
+  fileName      String
+  mimeType      String
+  // "pending" | "done" | "error"
+  status        String   @default("pending")
+  // JSON: ExtractedData shape
+  extractedData String?  @db.Text
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([rooftopId])
+}
+
+// ─── Feature Flags ───────────────────────────────────────────────────────────
+
+// Lightweight feature flag table.
+// rooftopId = null → global flag (applies to all rooftops).
+// rooftopId set → override for that specific rooftop only.
+// Evaluator checks rooftop-level first, falls back to global.
+model FeatureFlag {
+  id         String   @id @default(cuid())
+  flagKey    String   // e.g. "dms_sync", "mfa_enforcement", "tablet_ux"
+  rooftopId  String?  // null = global; set = rooftop-level override
+  enabled    Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([flagKey, rooftopId])
+  @@index([flagKey])
+}
+
+// ─── Messaging & Announcements ───────────────────────────────────────────────
+
+// Threaded messages and formal notes per Repair Order
+// category: "message" (internal chat) | "note" (formal dealer-wide log) | "external" (customer-facing)
+model ROMessage {
+  id            String      @id @default(cuid())
+  repairOrderId String
+  authorId      String
+  content       String      @db.Text
+  category      String      @default("message")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  author      User        @relation("UserROMessages", fields: [authorId], references: [id])
+
+  @@index([repairOrderId])
+}
+
+// Dealer-wide announcements per rooftop
+// priority: "info" | "warning" | "urgent"
+model Announcement {
+  id        String    @id @default(cuid())
+  rooftopId String
+  authorId  String
+  title     String
+  body      String    @db.Text
+  priority  String    @default("info")
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  rooftop Rooftop @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  author  User    @relation("UserAnnouncements", fields: [authorId], references: [id])
+
+  @@index([rooftopId])
+}
+
+// ─── System ───────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  userId        String?
+  rooftopId     String?
+  repairOrderId String?
+  action        String   // e.g. "ro.created", "ro.presented", "rule.updated"
+  entityType    String?
+  entityId      String?
+  diff          String?  @db.Text // JSON
+  createdAt     DateTime @default(now())
+
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  repairOrder RepairOrder? @relation(fields: [repairOrderId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([rooftopId])
+  @@index([createdAt])
+}

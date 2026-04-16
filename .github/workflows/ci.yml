@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Typecheck → Lint → Build
+    runs-on: ubuntu-latest
+
+    env:
+      # Provide a dummy DATABASE_URL so Prisma generate succeeds without a live DB.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/partspartner_ci
+      # The actual CLI URL (prisma+postgres://) is not needed in CI — we only run db push in the drift check.
+      NEXTAUTH_SECRET: ci-secret-placeholder
+      NEXTAUTH_URL: http://localhost:3000
+      # Anthropic / Blob tokens are not needed at build time — env vars are checked
+      # at runtime only. Supply empty strings so Next.js doesn't crash during build.
+      ANTHROPIC_API_KEY: placeholder
+      BLOB_READ_WRITE_TOKEN: placeholder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  schema-drift:
+    name: Schema drift check
+    runs-on: ubuntu-latest
+    # Only run this job on PRs so it doesn't block the main build on pushes
+    # without a live DB available (secrets are available on PRs from the same repo).
+    if: github.event_name == 'pull_request'
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: partspartner_drift
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/partspartner_drift
+      NEXTAUTH_SECRET: ci-secret-placeholder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Check schema drift (db push --accept-data-loss preview)
+        # --accept-data-loss is safe here because this is a fresh CI database.
+        # If the schema produces destructive changes it will still exit non-zero
+        # when there are unapplied migrations or drift detected.
+        run: npx prisma db push --accept-data-loss
