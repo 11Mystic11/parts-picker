@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AreaChart,
   Area,
@@ -121,6 +122,7 @@ function downloadCsv(advisors: AdvisorRow[], trend: TrendPoint[]) {
 }
 
 export default function AnalyticsPage() {
+  const router = useRouter();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("totalRevenue");
@@ -404,7 +406,7 @@ export default function AnalyticsPage() {
             {/* Mobile card layout */}
             <div className="md:hidden divide-y divide-border">
               {sortedAdvisors.map((a) => (
-                <div key={a.advisorId} className="px-5 py-3 space-y-1">
+                <div key={a.advisorId} onClick={() => router.push(`/dashboard/analytics/${a.advisorId}`)} className="px-5 py-3 space-y-1 cursor-pointer hover:bg-surface-hover transition-colors">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <span className="font-medium text-foreground">{a.name}</span>
@@ -449,8 +451,9 @@ export default function AnalyticsPage() {
                 {sortedAdvisors.map((a, i) => (
                   <tr
                     key={a.advisorId}
+                    onClick={() => router.push(`/dashboard/analytics/${a.advisorId}`)}
                     className={cn(
-                      "border-b border-border/50 last:border-0 hover:bg-surface-hover transition-colors",
+                      "border-b border-border/50 last:border-0 hover:bg-surface-hover transition-colors cursor-pointer",
                       i % 2 === 1 ? "bg-surface/50" : ""
                     )}
                   >

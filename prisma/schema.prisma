@@ -76,15 +76,23 @@ model Rooftop {
   // DMS integration
   dmsProvider    String?  // "cdk" | "reynolds" | null
   dmsConfig      String?  @db.Text // encrypted JSON: { clientId, clientSecret, dealerNumber, ... }
+  // RO numbering config
+  roNumberPrefix  String?  // e.g. "RO-", "WO", "" (empty = numbers only)
+  roNumberNext    Int      @default(1)   // next sequence number to assign
+  roNumberPadding Int      @default(5)   // zero-padding width e.g. 5 → "00042"
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   users           User[]
   additionalUsers UserRooftop[]
   repairOrders    RepairOrder[]
   pricingMatrix   PricingMatrix[]
   announcements   Announcement[]
+  partInventory   PartInventory[]
+  // [FEATURE: core_return_tracking] START
+  partReturns     PartReturn[]
+  // [FEATURE: core_return_tracking] END
 
   @@index([organizationId])
 }
@@ -96,7 +104,7 @@ model User {
   emailVerified  DateTime?
   image          String?
   hashedPassword String?
-  // role: "admin" | "advisor" | "manager" | "developer"
+  // role: "admin" | "advisor" | "manager" | "developer" | "technician"
   role           String   @default("advisor")
   organizationId String?
   rooftopId      String?
@@ -116,6 +124,23 @@ model User {
   importBatches       ImportBatch[]
   roMessages          ROMessage[]   @relation("UserROMessages")
   announcements       Announcement[] @relation("UserAnnouncements")
+  techRepairOrders    RepairOrder[] @relation("TechRepairOrders")
+  inventoryMovements  InventoryMovement[]
+  // [FEATURE: dvi] START
+  dviReports          DVIReport[]   @relation("TechDVIReports")
+  // [FEATURE: dvi] END
+  // [FEATURE: tech_time_clock] START
+  timeEntries         TimeEntry[]   @relation("TechTimeEntries")
+  // [FEATURE: tech_time_clock] END
+  // [FEATURE: parts_ordering] START
+  partsOrders         PartsOrder[]  @relation("UserPartsOrders")
+  // [FEATURE: parts_ordering] END
+  // [FEATURE: core_return_tracking] START
+  partReturns         PartReturn[]  @relation("UserPartReturns")
+  // [FEATURE: core_return_tracking] END
+  // [FEATURE: canned_inspections] START
+  techInspections     RoInspection[] @relation("TechInspections")
+  // [FEATURE: canned_inspections] END
 
   @@unique([rooftopId, employeeId])
 }
@@ -318,6 +343,8 @@ model RepairOrder {
   // Full decoded vehicle snapshot at time of RO creation
   vehicleSnapshot String   @db.Text // JSON
   currentMileage  Int?
+  // Human-readable RO number, e.g. "RO-00042" (set at creation from rooftop config)
+  roNumber        String?  @unique
   // status: "draft" | "presented" | "approved" | "closed" | "void"
   status          String   @default("draft")
   // Current wizard step: 1-5
@@ -335,20 +362,50 @@ model RepairOrder {
   dmsSyncStatus   String?  // "pending" | "synced" | "failed"
   dmsSyncedAt     DateTime?
   dmsExternalId   String?  // RO ID assigned by DMS
-  dmsSyncAttempts Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  dmsSyncAttempts   Int      @default(0)
+  // Scheduling
+  scheduledAt       DateTime?          // appointment date/time
+  estimatedDuration Int?               // in minutes
+  assignedTechId    String?            // FK → User (technician)
+  // Customer info
+  customerName      String?
+  customerPhone     String?
+  customerEmail     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  rooftop    Rooftop       @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
-  advisor    User          @relation(fields: [advisorId], references: [id])
-  lineItems  ROLineItem[]
-  overrides  ROOverride[]
-  auditLogs  AuditLog[]
-  messages   ROMessage[]
+  rooftop      Rooftop       @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  advisor      User          @relation(fields: [advisorId], references: [id])
+  assignedTech User?         @relation("TechRepairOrders", fields: [assignedTechId], references: [id])
+  lineItems    ROLineItem[]
+  overrides    ROOverride[]
+  auditLogs    AuditLog[]
+  messages     ROMessage[]
+  // [FEATURE: customer_approval_portal] START
+  approvalToken  ROApprovalToken?
+  lineDecisions  ROLineItemDecision[]
+  // [FEATURE: customer_approval_portal] END
+  // [FEATURE: dvi] START
+  dviReport      DVIReport?
+  // [FEATURE: dvi] END
+  // [FEATURE: tech_time_clock] START
+  timeEntries    TimeEntry[]
+  // [FEATURE: tech_time_clock] END
+  // [FEATURE: parts_ordering] START
+  partsOrders    PartsOrder[]
+  // [FEATURE: parts_ordering] END
+  // [FEATURE: core_return_tracking] START
+  partReturns    PartReturn[]
+  // [FEATURE: core_return_tracking] END
+  // [FEATURE: canned_inspections] START
+  inspections    RoInspection[]
+  // [FEATURE: canned_inspections] END
 
   @@index([rooftopId, status])
   @@index([advisorId])
   @@index([vin])
+  @@index([scheduledAt])
+  @@index([assignedTechId])
 }
 
 model ROLineItem {
@@ -374,6 +431,18 @@ model ROLineItem {
 
   repairOrder RepairOrder  @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
   overrides   ROOverride[]
+  // [FEATURE: customer_approval_portal] START
+  customerDecision ROLineItemDecision?
+  // [FEATURE: customer_approval_portal] END
+  // [FEATURE: dvi] START
+  dviItem      DVIItem?
+  // [FEATURE: dvi] END
+  // [FEATURE: tech_time_clock] START
+  timeEntries  TimeEntry[]
+  // [FEATURE: tech_time_clock] END
+  // [FEATURE: core_return_tracking] START
+  partReturns  PartReturn[]
+  // [FEATURE: core_return_tracking] END
 
   @@index([repairOrderId])
 }
@@ -491,4 +560,276 @@ model AuditLog {
   @@index([userId])
   @@index([rooftopId])
   @@index([createdAt])
+}
+
+// ─── Inventory ────────────────────────────────────────────────────────────────
+
+// Per-rooftop parts inventory (warehouse stock, not OEM catalog)
+// category: "Filters" | "Fluids" | "Brakes" | "Batteries" | "Belts" | "Ignition" | "Wipers" | "Other"
+model PartInventory {
+  id             String   @id @default(cuid())
+  rooftopId      String
+  partNumber     String
+  description    String
+  category       String   @default("Other")
+  supplier       String?
+  unitCost       Float    @default(0)
+  unitPrice      Float    @default(0)
+  quantityOnHand Float    @default(0)
+  reorderPoint   Float    @default(5)
+  reorderQty     Float    @default(10)
+  location       String?  // bin/shelf e.g. "A3-12"
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  rooftop   Rooftop             @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  movements InventoryMovement[]
+
+  @@unique([rooftopId, partNumber])
+  @@index([rooftopId])
+  @@index([rooftopId, category])
+}
+
+// Audit trail for every stock movement
+// type: "receive" | "use" | "adjust" | "return"
+// quantity is positive for stock in, negative for stock out
+model InventoryMovement {
+  id            String   @id @default(cuid())
+  inventoryId   String
+  type          String
+  quantity      Float
+  previousQty   Float
+  newQty        Float
+  reason        String?
+  referenceId   String?  // e.g. RO id when type = "use"
+  performedById String
+  createdAt     DateTime @default(now())
+
+  inventory   PartInventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  performedBy User          @relation(fields: [performedById], references: [id])
+
+  @@index([inventoryId])
+  @@index([performedById])
+}
+
+// ─── [FEATURE: customer_approval_portal] ─────────────────────────────────────
+// Token-based public link for customers to approve/decline RO line items remotely.
+// Remove this section and related back-relations on RepairOrder/ROLineItem to disable.
+
+model ROApprovalToken {
+  id            String    @id @default(cuid())
+  repairOrderId String    @unique
+  token         String    @unique @default(cuid())
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+model ROLineItemDecision {
+  id            String   @id @default(cuid())
+  repairOrderId String
+  lineItemId    String   @unique
+  decision      String   // "approved" | "declined"
+  customerName  String?
+  decidedAt     DateTime @default(now())
+
+  repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  lineItem    ROLineItem  @relation(fields: [lineItemId], references: [id], onDelete: Cascade)
+
+  @@index([repairOrderId])
+}
+
+// ─── [FEATURE: dvi] ──────────────────────────────────────────────────────────
+// Digital Vehicle Inspection — photo/video documentation per RO line item.
+// Remove this section and related back-relations on RepairOrder/ROLineItem/User to disable.
+
+model DVIReport {
+  id            String   @id @default(cuid())
+  repairOrderId String   @unique
+  techId        String
+  status        String   @default("in_progress") // "in_progress" | "complete"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  tech        User        @relation("TechDVIReports", fields: [techId], references: [id])
+  items       DVIItem[]
+}
+
+model DVIItem {
+  id          String   @id @default(cuid())
+  reportId    String
+  lineItemId  String?  @unique
+  label       String
+  condition   String   @default("ok") // "ok" | "advisory" | "critical"
+  notes       String?  @db.Text
+  photoUrls   String   @default("[]") @db.Text // JSON array of Vercel Blob URLs
+  videoUrl    String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  report   DVIReport   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  lineItem ROLineItem? @relation(fields: [lineItemId], references: [id], onDelete: SetNull)
+
+  @@index([reportId])
+}
+
+// ─── [FEATURE: tech_time_clock] ──────────────────────────────────────────────
+// Technician time clock — clock in/out per labor op; tracks actual vs flat-rate hours.
+// Remove this section and related back-relations on RepairOrder/ROLineItem/User to disable.
+
+model TimeEntry {
+  id            String    @id @default(cuid())
+  repairOrderId String
+  lineItemId    String?
+  techId        String
+  clockedInAt   DateTime  @default(now())
+  clockedOutAt  DateTime?
+  flatRateHours Float?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  lineItem    ROLineItem? @relation(fields: [lineItemId], references: [id], onDelete: SetNull)
+  tech        User        @relation("TechTimeEntries", fields: [techId], references: [id])
+
+  @@index([repairOrderId])
+  @@index([techId])
+  @@index([clockedInAt])
+}
+
+// ─── [FEATURE: parts_ordering] ───────────────────────────────────────────────
+// Parts ordering integration — search NAPA/AutoZone and submit orders from within the RO.
+// Remove this section and related back-relations on RepairOrder/User to disable.
+
+model PartsOrder {
+  id              String    @id @default(cuid())
+  repairOrderId   String
+  rooftopId       String
+  placedById      String
+  supplier        String    // "NAPA" | "AutoZone" | "mock"
+  externalOrderId String?
+  status          String    @default("pending") // "pending"|"submitted"|"confirmed"|"error"
+  items           String    @db.Text // JSON: [{ partNumber, description, quantity, unitCost }]
+  errorMessage    String?
+  submittedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  placedBy    User        @relation("UserPartsOrders", fields: [placedById], references: [id])
+
+  @@index([repairOrderId])
+  @@index([rooftopId])
+}
+
+// ─── [FEATURE: core_return_tracking] ─────────────────────────────────────────
+// Core/warranty return tracking — track parts returned to supplier for credit recovery.
+// Remove this section and related back-relations on Rooftop/RepairOrder/ROLineItem/User to disable.
+
+model PartReturn {
+  id             String    @id @default(cuid())
+  rooftopId      String
+  repairOrderId  String?
+  lineItemId     String?
+  partNumber     String
+  description    String
+  supplier       String
+  returnType     String    // "core" | "warranty"
+  quantity       Float     @default(1)
+  expectedCredit Float     @default(0)
+  actualCredit   Float?
+  status         String    @default("pending") // "pending"|"submitted"|"received"|"credited"|"rejected"
+  trackingNumber String?
+  notes          String?   @db.Text
+  submittedAt    DateTime?
+  receivedAt     DateTime?
+  creditedAt     DateTime?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  rooftop     Rooftop      @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  repairOrder RepairOrder? @relation(fields: [repairOrderId], references: [id], onDelete: SetNull)
+  lineItem    ROLineItem?  @relation(fields: [lineItemId], references: [id], onDelete: SetNull)
+  createdBy   User         @relation("UserPartReturns", fields: [createdById], references: [id])
+
+  @@index([rooftopId, status])
+  @@index([repairOrderId])
+}
+
+// ─── [FEATURE: canned_inspections] ───────────────────────────────────────────
+// Canned/packaged inspection templates — multi-point checklists auto-attached to ROs.
+// Remove this section and related back-relations on RepairOrder/User to disable.
+
+model InspectionTemplate {
+  id             String   @id @default(cuid())
+  rooftopId      String?  // null = system-wide template available to all rooftops
+  name           String
+  description    String?
+  triggerMileage Int?     // auto-attach when RO mileage is within triggerWindow of this value
+  triggerWindow  Int?     @default(2500)
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  items       InspectionTemplateItem[]
+  inspections RoInspection[]
+}
+
+model InspectionTemplateItem {
+  id         String @id @default(cuid())
+  templateId String
+  label      String
+  // "condition" = ok/advisory/critical toggle
+  // "passfail"  = pass/fail toggle
+  // "measurement" = numeric value with unit
+  checkType  String @default("condition")
+  unit       String?
+  sortOrder  Int    @default(0)
+
+  template InspectionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  results  InspectionResult[]
+
+  @@index([templateId])
+}
+
+model RoInspection {
+  id            String   @id @default(cuid())
+  repairOrderId String
+  templateId    String
+  techId        String
+  status        String   @default("in_progress") // "in_progress" | "complete"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  repairOrder RepairOrder        @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  template    InspectionTemplate @relation(fields: [templateId], references: [id])
+  tech        User               @relation("TechInspections", fields: [techId], references: [id])
+  results     InspectionResult[]
+
+  @@unique([repairOrderId, templateId])
+  @@index([repairOrderId])
+}
+
+model InspectionResult {
+  id             String   @id @default(cuid())
+  inspectionId   String
+  templateItemId String
+  value          String?  // condition/pass-fail string, or numeric measurement as string
+  notes          String?
+  updatedAt      DateTime @updatedAt
+
+  inspection   RoInspection           @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  templateItem InspectionTemplateItem @relation(fields: [templateItemId], references: [id])
+
+  @@unique([inspectionId, templateItemId])
 }

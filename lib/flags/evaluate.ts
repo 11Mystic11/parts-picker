@@ -8,6 +8,27 @@ export const FLAG_KEYS = [
   "dms_sync",         // Enable live DMS sync on RO approval
   "mfa_enforcement",  // Honour rooftop.mfaRequired and redirect to /auth/mfa
   "tablet_ux",        // Progressive rollout of Phase 10 tablet UX
+  // [FEATURE: customer_approval_portal] START
+  "customer_approval_portal", // SMS/email magic-token approval link for customers
+  // [FEATURE: customer_approval_portal] END
+  // [FEATURE: dvi] START
+  "dvi",              // Digital Vehicle Inspection — photo/video per line item
+  // [FEATURE: dvi] END
+  // [FEATURE: tech_time_clock] START
+  "tech_time_clock",  // Technician clock in/out per labor op; efficiency reporting
+  // [FEATURE: tech_time_clock] END
+  // [FEATURE: parts_ordering] START
+  "parts_ordering",   // Search NAPA/AutoZone catalogs and submit orders from RO
+  // [FEATURE: parts_ordering] END
+  // [FEATURE: core_return_tracking] START
+  "core_return_tracking", // Track core/warranty part returns to supplier
+  // [FEATURE: core_return_tracking] END
+  // [FEATURE: canned_inspections] START
+  "canned_inspections",   // Multi-point inspection templates auto-attached by mileage
+  // [FEATURE: canned_inspections] END
+  // [FEATURE: inventory_ro_integration] START
+  "inventory_ro_integration", // Auto-decrement inventory on RO approval; low-stock warnings
+  // [FEATURE: inventory_ro_integration] END
 ] as const;
 
 export type FlagKey = (typeof FLAG_KEYS)[number];

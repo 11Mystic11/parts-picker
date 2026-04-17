@@ -40,7 +40,28 @@ import {
   ClipboardList,
   Trash2,
   Send,
+  // [FEATURE: customer_approval_portal] START
+  Share2,
+  // [FEATURE: customer_approval_portal] END
+  // [FEATURE: inventory_ro_integration] START
+  AlertTriangle,
+  // [FEATURE: inventory_ro_integration] END
+  // [FEATURE: tech_time_clock] START
+  Timer,
+  // [FEATURE: tech_time_clock] END
+  // [FEATURE: core_return_tracking] START
+  RotateCcw,
+  // [FEATURE: core_return_tracking] END
 } from "lucide-react";
+// [FEATURE: customer_approval_portal] START
+import { ApprovalSendDialog } from "@/components/ro/approval-send-dialog";
+// [FEATURE: customer_approval_portal] END
+// [FEATURE: parts_ordering] START
+import { PartsOrderPanel } from "@/components/parts-ordering/parts-order-panel";
+// [FEATURE: parts_ordering] END
+// [FEATURE: core_return_tracking] START
+import { ReturnForm } from "@/components/returns/return-form";
+// [FEATURE: core_return_tracking] END
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -424,6 +445,34 @@ export function RODetailClient({
   const [presentError, setPresentError] = useState("");
   const [approving, setApproving] = useState(false);
   const [approveError, setApproveError] = useState("");
+  // [FEATURE: customer_approval_portal] START
+  const [showApprovalDialog, setShowApprovalDialog] = useState(false);
+  // [FEATURE: customer_approval_portal] END
+  // [FEATURE: core_return_tracking] START
+  const [returnFormItem, setReturnFormItem] = useState<{ lineItemId: string; partNumber: string; description: string } | null>(null);
+  // [FEATURE: core_return_tracking] END
+  // [FEATURE: inventory_ro_integration] START
+  const [stockWarnings, setStockWarnings] = useState<{ lineItemId: string; partNumber: string; isLow: boolean; qtyNeeded: number; qtyOnHand: number }[]>([]);
+  useEffect(() => {
+    if (status === "draft" || status === "presented") {
+      fetch(`/api/ro/${roId}/stock-check`)
+        .then((r) => r.json())
+        .then((data) => setStockWarnings(data.results ?? []))
+        .catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roId, status]);
+  const lowStockIds = new Set(stockWarnings.filter((s) => s.isLow).map((s) => s.lineItemId));
+  // [FEATURE: inventory_ro_integration] END
+  // [FEATURE: tech_time_clock] START
+  const [timeEntries, setTimeEntries] = useState<{ id: string; clockedInAt: string; clockedOutAt: string | null; flatRateHours: number | null; notes: string | null; tech: { name: string | null } | null }[]>([]);
+  const [timeLoaded, setTimeLoaded] = useState(false);
+  async function loadTimeEntries() {
+    const res = await fetch(`/api/ro/${roId}/time-entries`);
+    if (res.ok) { const d = await res.json(); setTimeEntries(d.entries ?? []); }
+    setTimeLoaded(true);
+  }
+  // [FEATURE: tech_time_clock] END
 
   const [showAddPart, setShowAddPart] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -617,7 +666,7 @@ export function RODetailClient({
 
       {/* Main tabs */}
       <Tabs defaultValue="summary">
-        <TabsList className="w-full md:w-auto">
+        <TabsList className="w-full md:w-auto flex-wrap">
           <TabsTrigger value="summary" className="flex items-center gap-1.5">
             <ClipboardList className="h-4 w-4" />
             Summary
@@ -630,6 +679,24 @@ export function RODetailClient({
             <Pencil className="h-4 w-4" />
             Notes
           </TabsTrigger>
+          {/* [FEATURE: dvi] START */}
+          <TabsTrigger value="dvi" className="flex items-center gap-1.5">
+            <CheckCircle className="h-4 w-4" />
+            DVI
+          </TabsTrigger>
+          {/* [FEATURE: dvi] END */}
+          {/* [FEATURE: tech_time_clock] START */}
+          <TabsTrigger value="time" className="flex items-center gap-1.5" onClick={() => { if (!timeLoaded) loadTimeEntries(); }}>
+            <Timer className="h-4 w-4" />
+            Time
+          </TabsTrigger>
+          {/* [FEATURE: tech_time_clock] END */}
+          {/* [FEATURE: parts_ordering] START */}
+          <TabsTrigger value="parts-orders" className="flex items-center gap-1.5">
+            <Package className="h-4 w-4" />
+            Parts Orders
+          </TabsTrigger>
+          {/* [FEATURE: parts_ordering] END */}
         </TabsList>
 
         {/* ── Summary Tab ─────────────────────────────────────────────────── */}
@@ -675,7 +742,7 @@ export function RODetailClient({
                       <span className="text-xs text-muted-foreground">
                         Qty {item.quantity} · Unit {fmt(item.unitPrice)}
                       </span>
-                      {isDraft && item.source === "manual" && (
+                      {isDraft && (
                         <button
                           onClick={() => handleRemoveItem(item.id)}
                           disabled={removingId === item.id}
@@ -721,9 +788,31 @@ export function RODetailClient({
                             {item.supplier && (
                               <Badge variant="outline" className="text-xs h-5">{item.supplier}</Badge>
                             )}
+                            {/* [FEATURE: inventory_ro_integration] START */}
+                            {lowStockIds.has(item.id) && (
+                              <Badge className="text-xs h-5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                Low Stock
+                              </Badge>
+                            )}
+                            {/* [FEATURE: inventory_ro_integration] END */}
                           </div>
                           {item.partNumber && (
-                            <div className="text-xs text-muted-foreground font-mono">#{item.partNumber}</div>
+                            <div className="text-xs text-muted-foreground font-mono">
+                              #{item.partNumber}
+                              {/* [FEATURE: core_return_tracking] START */}
+                              {(status === "approved" || status === "closed") && (
+                                <button
+                                  onClick={() => setReturnFormItem({ lineItemId: item.id, partNumber: item.partNumber ?? "", description: item.description })}
+                                  className="ml-2 text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
+                                  title="Log a core/warranty return"
+                                >
+                                  <RotateCcw className="h-3 w-3" />
+                                  Return
+                                </button>
+                              )}
+                              {/* [FEATURE: core_return_tracking] END */}
+                            </div>
                           )}
                         </td>
                         <td className="px-4 py-2.5 text-right">
@@ -792,7 +881,7 @@ export function RODetailClient({
                         </td>
                         {isDraft && (
                           <td className="px-2 py-2.5 text-right">
-                            {item.source === "manual" && !editingThis && (
+                            {!editingThis && (
                               <button
                                 onClick={() => handleRemoveItem(item.id)}
                                 disabled={removingId === item.id}
@@ -987,6 +1076,17 @@ export function RODetailClient({
             </div>
           </div>
 
+          {/* [FEATURE: inventory_ro_integration] START */}
+          {isDraft && lowStockIds.size > 0 && (
+            <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-amber-800 dark:text-amber-300 text-sm">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <span>
+                {lowStockIds.size} part{lowStockIds.size > 1 ? "s are" : " is"} low or out of stock. Review inventory before presenting.
+              </span>
+            </div>
+          )}
+          {/* [FEATURE: inventory_ro_integration] END */}
+
           {/* Actions */}
           <div className="flex items-center justify-between pt-2">
             <a
@@ -1012,6 +1112,12 @@ export function RODetailClient({
 
             {isPresented && (
               <div className="flex items-center gap-3">
+                {/* [FEATURE: customer_approval_portal] START */}
+                <Button variant="outline" onClick={() => setShowApprovalDialog(true)}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Send for Approval
+                </Button>
+                {/* [FEATURE: customer_approval_portal] END */}
                 {approveError && <p className="text-sm text-red-600">{approveError}</p>}
                 <Button onClick={handleApprove} disabled={approving} id="approve-ro-btn">
                   {approving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
@@ -1042,6 +1148,68 @@ export function RODetailClient({
             <MessagesTab roId={roId} category="note" />
           </div>
         </TabsContent>
+
+        {/* [FEATURE: dvi] START */}
+        <TabsContent value="dvi" className="mt-4">
+          <div className="border border-border rounded-lg p-4 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Capture photos, videos, and condition ratings for each line item.
+            </p>
+            <a
+              href={`/dashboard/ro/${roId}/dvi`}
+              className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+            >
+              <CheckCircle className="h-4 w-4" />
+              Open Digital Vehicle Inspection
+            </a>
+          </div>
+        </TabsContent>
+        {/* [FEATURE: dvi] END */}
+
+        {/* [FEATURE: tech_time_clock] START */}
+        <TabsContent value="time" className="mt-4">
+          <div className="border border-border rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Time Entries</p>
+              <a href={`/dashboard/tech/time-clock`} className="text-xs text-primary hover:underline">Clock in/out</a>
+            </div>
+            {!timeLoaded ? (
+              <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : timeEntries.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No time entries yet.</p>
+            ) : (
+              <div className="divide-y border rounded-md text-sm">
+                {timeEntries.map((entry) => {
+                  const inMs = entry.clockedOutAt
+                    ? new Date(entry.clockedOutAt).getTime() - new Date(entry.clockedInAt).getTime()
+                    : Date.now() - new Date(entry.clockedInAt).getTime();
+                  const hrs = (inMs / 3600000).toFixed(2);
+                  return (
+                    <div key={entry.id} className="flex items-center justify-between px-3 py-2 gap-4">
+                      <div>
+                        <span className="font-medium">{entry.tech?.name ?? "Tech"}</span>
+                        <span className="text-muted-foreground text-xs ml-2">{new Date(entry.clockedInAt).toLocaleString()}</span>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div>{entry.clockedOutAt ? `${hrs} hrs actual` : <span className="text-amber-600">In progress</span>}</div>
+                        {entry.flatRateHours && <div className="text-xs text-muted-foreground">{entry.flatRateHours} flat-rate hrs</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+        {/* [FEATURE: tech_time_clock] END */}
+
+        {/* [FEATURE: parts_ordering] START */}
+        <TabsContent value="parts-orders" className="mt-4">
+          <div className="border border-border rounded-lg p-4">
+            <PartsOrderPanel roId={roId} />
+          </div>
+        </TabsContent>
+        {/* [FEATURE: parts_ordering] END */}
       </Tabs>
 
       {/* Add Part Dialog */}
@@ -1051,6 +1219,29 @@ export function RODetailClient({
         onAdd={handlePartAdded}
         roId={roId}
       />
+
+      {/* [FEATURE: customer_approval_portal] START */}
+      {showApprovalDialog && (
+        <ApprovalSendDialog
+          roId={roId}
+          customerPhone={null}
+          customerEmail={null}
+          onClose={() => setShowApprovalDialog(false)}
+        />
+      )}
+      {/* [FEATURE: customer_approval_portal] END */}
+
+      {/* [FEATURE: core_return_tracking] START */}
+      {returnFormItem && (
+        <ReturnForm
+          roId={roId}
+          lineItemId={returnFormItem.lineItemId}
+          prefill={{ partNumber: returnFormItem.partNumber, description: returnFormItem.description }}
+          onClose={() => setReturnFormItem(null)}
+          onSaved={() => setReturnFormItem(null)}
+        />
+      )}
+      {/* [FEATURE: core_return_tracking] END */}
     </div>
   );
 }

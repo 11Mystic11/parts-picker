@@ -6,6 +6,13 @@ import Link from "next/link";
 import { ChevronLeft, Car } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { RODetailClient } from "./ro-detail-client";
+import { ROScheduleForm } from "./ro-schedule-form";
+// [FEATURE: dvi] START
+import { DVISummary } from "@/components/dvi/dvi-summary";
+// [FEATURE: dvi] END
+// [FEATURE: canned_inspections] START
+import { InspectionSummary } from "@/components/inspections/inspection-summary";
+// [FEATURE: canned_inspections] END
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -21,21 +28,46 @@ export default async function RODetailPage({ params }: Props) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/auth/signin");
 
-  const user = session.user as { rooftopId?: string };
+  const user = session.user as { rooftopId?: string; role?: string };
   const { id } = await params;
 
-  const ro = await db.repairOrder.findUnique({
-    where: { id },
-    include: {
-      lineItems: { orderBy: { sortOrder: "asc" } },
-      advisor: { select: { name: true, email: true } },
-      overrides: {
-        orderBy: { createdAt: "desc" },
-        include: { advisor: { select: { name: true } } },
-        take: 20,
+  const [ro, techs] = await Promise.all([
+    db.repairOrder.findUnique({
+      where: { id },
+      include: {
+        lineItems: { orderBy: { sortOrder: "asc" } },
+        advisor: { select: { name: true, email: true } },
+        assignedTech: { select: { id: true, name: true } },
+        overrides: {
+          orderBy: { createdAt: "desc" },
+          include: { advisor: { select: { name: true } } },
+          take: 20,
+        },
+        // [FEATURE: dvi] START
+        dviReport: {
+          include: {
+            items: { orderBy: { sortOrder: "asc" } },
+          },
+        },
+        // [FEATURE: dvi] END
+        // [FEATURE: canned_inspections] START
+        inspections: {
+          include: {
+            template: { select: { name: true, items: true } },
+            results: { include: { templateItem: { select: { label: true, checkType: true, unit: true } } } },
+          },
+          orderBy: { createdAt: "desc" },
+        },
+        // [FEATURE: canned_inspections] END
       },
-    },
-  });
+    }),
+    // Load techs in this rooftop for assignment dropdown
+    db.user.findMany({
+      where: { rooftopId: user.rooftopId, role: "technician" },
+      select: { id: true, name: true, employeeId: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   if (!ro) notFound();
   if (ro.rooftopId !== user.rooftopId) notFound();
@@ -44,7 +76,7 @@ export default async function RODetailPage({ params }: Props) {
   try { vehicle = JSON.parse(ro.vehicleSnapshot); } catch { /* use empty */ }
 
   const vehicleName = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
-  const roNumber = `RO-${ro.id.slice(-8).toUpperCase()}`;
+  const roNumber = ro.roNumber ?? `RO-${ro.id.slice(-8).toUpperCase()}`;
 
   return (
     <div className="p-6 max-w-4xl">
@@ -93,6 +125,20 @@ export default async function RODetailPage({ params }: Props) {
         </div>
       </div>
 
+      {/* Scheduling panel — visible to advisor/manager/admin */}
+      {user.role !== "technician" && (
+        <ROScheduleForm
+          roId={ro.id}
+          scheduledAt={ro.scheduledAt?.toISOString() ?? null}
+          estimatedDuration={ro.estimatedDuration ?? null}
+          assignedTechId={ro.assignedTechId ?? null}
+          customerName={ro.customerName ?? null}
+          customerPhone={ro.customerPhone ?? null}
+          customerEmail={ro.customerEmail ?? null}
+          techs={techs}
+        />
+      )}
+
       {/* Line items + actions (client component) */}
       <RODetailClient
         roId={ro.id}
@@ -121,6 +167,22 @@ export default async function RODetailPage({ params }: Props) {
         dmsSyncedAt={ro.dmsSyncedAt?.toISOString() ?? null}
         dmsExternalId={ro.dmsExternalId}
       />
+
+      {/* [FEATURE: dvi] START */}
+      {ro.dviReport && (
+        <div className="mt-6">
+          <DVISummary report={ro.dviReport as any} />
+        </div>
+      )}
+      {/* [FEATURE: dvi] END */}
+
+      {/* [FEATURE: canned_inspections] START */}
+      {ro.inspections && ro.inspections.length > 0 && (
+        <div className="mt-6 space-y-4">
+          <InspectionSummary inspections={ro.inspections} />
+        </div>
+      )}
+      {/* [FEATURE: canned_inspections] END */}
 
       {/* Override audit trail */}
       {ro.overrides.length > 0 && (

@@ -45,6 +45,7 @@ function timeAgo(dateStr: string): string {
 
 interface RO {
   id: string;
+  roNumber: string | null;
   vin: string;
   vehicleSnapshot: string;
   status: string;
@@ -152,7 +153,7 @@ export default function RepairOrdersPage() {
                       href={`/dashboard/ro/${ro.id}`}
                       className="font-mono text-xs text-primary hover:text-primary/80 hover:underline"
                     >
-                      RO-{ro.id.slice(-8).toUpperCase()}
+                      {ro.roNumber ?? `RO-${ro.id.slice(-8).toUpperCase()}`}
                     </Link>
                   </td>
                   <td className="px-4 py-3">

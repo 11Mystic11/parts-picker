@@ -37,7 +37,7 @@ export async function GET() {
 const inviteSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  role: z.enum(["advisor", "admin", "manager", "developer"]),
+  role: z.enum(["advisor", "technician", "admin", "manager", "developer"]),
   employeeId: employeeIdSchema,
 });
 

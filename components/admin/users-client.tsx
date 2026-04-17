@@ -31,13 +31,14 @@ type User = {
   createdAt: string;
 };
 
-const ROLE_OPTIONS = ["advisor", "manager", "admin", "developer"] as const;
+const ROLE_OPTIONS = ["advisor", "technician", "manager", "admin", "developer"] as const;
 type Role = (typeof ROLE_OPTIONS)[number];
 
 const ROLE_COLORS: Record<string, string> = {
   admin: "bg-purple-100 text-purple-700",
   manager: "bg-blue-100 text-blue-700",
   advisor: "bg-green-100 text-green-700",
+  technician: "bg-amber-100 text-amber-700",
   developer: "bg-surface text-foreground",
 };
 

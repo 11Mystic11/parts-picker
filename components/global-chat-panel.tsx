@@ -77,15 +77,32 @@ function useChatState() {
     if (!session) return;
     fetch("/api/ro?limit=50")
       .then((r) => r.json())
-      .then((data) => setRos(data.ros ?? []))
+      .then((data) => {
+        const fetched: RO[] = data.ros ?? [];
+        setRos((prev) => {
+          // Merge: keep any orphan RO we pre-fetched, add new ones
+          const existingIds = new Set(fetched.map((r) => r.id));
+          const orphans = prev.filter((r) => !existingIds.has(r.id));
+          return [...fetched, ...orphans];
+        });
+      })
       .catch(() => {});
   }, [session]);
 
-  // Auto-select RO when navigating to an RO page
+  // Auto-select RO when navigating to an RO page; pre-fetch it so the label shows
   useEffect(() => {
-    if (roFromPath && roFromPath !== selectedRoId) {
-      setSelectedRoId(roFromPath);
-    }
+    if (!roFromPath) return;
+    if (roFromPath === selectedRoId) return;
+    setSelectedRoId(roFromPath);
+    // Pre-fetch this specific RO so the Select has a label immediately
+    fetch(`/api/ro/${roFromPath}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { ro?: RO } | null) => {
+        const ro = data?.ro ?? null;
+        if (!ro) return;
+        setRos((prev) => (prev.some((r) => r.id === ro.id) ? prev : [ro, ...prev]));
+      })
+      .catch(() => {});
   }, [roFromPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch messages for selected RO

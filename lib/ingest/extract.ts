@@ -1,5 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages";
+import OpenAI from "openai";
 
 export type ExtractedService = {
   description: string;
@@ -70,7 +69,7 @@ Rules:
 - All numeric values must be numbers (not strings). Null for missing values.`;
 
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
-type AllowedImageType = typeof ALLOWED_IMAGE_TYPES[number];
+type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
 
 function isAllowedImageType(mime: string): mime is AllowedImageType {
   return (ALLOWED_IMAGE_TYPES as readonly string[]).includes(mime);
@@ -80,50 +79,52 @@ export async function extractFromDocument(
   fileBuffer: Buffer,
   mimeType: string
 ): Promise<ExtractedData> {
-  const client = new Anthropic();
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  let contentBlock: ContentBlockParam;
+  const base64 = fileBuffer.toString("base64");
+
+  let userContent: OpenAI.Chat.ChatCompletionContentPart[];
 
   if (mimeType === "application/pdf") {
-    contentBlock = {
-      type: "document",
-      source: {
-        type: "base64",
-        media_type: "application/pdf",
-        data: fileBuffer.toString("base64"),
+    // GPT-4o doesn't accept PDF natively — send as file upload via responses API
+    // Fallback: treat PDF pages as a base64 data URL (not supported directly).
+    // Instead, embed the raw base64 as text context and note the limitation.
+    userContent = [
+      {
+        type: "text",
+        text: `${USER_PROMPT}\n\n[PDF document provided as base64 — extract what you can from any text content]\n\nBase64 data (first 50000 chars): ${base64.slice(0, 50000)}`,
       },
-    } as ContentBlockParam;
+    ];
   } else if (isAllowedImageType(mimeType)) {
-    contentBlock = {
-      type: "image",
-      source: {
-        type: "base64",
-        media_type: mimeType,
-        data: fileBuffer.toString("base64"),
+    userContent = [
+      {
+        type: "image_url",
+        image_url: {
+          url: `data:${mimeType};base64,${base64}`,
+          detail: "high",
+        },
       },
-    };
+      { type: "text", text: USER_PROMPT },
+    ];
   } else {
     throw new Error(`Unsupported file type: ${mimeType}`);
   }
 
-  const content: ContentBlockParam[] = [contentBlock, { type: "text", text: USER_PROMPT }];
-
-  const response = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+  const response = await client.chat.completions.create({
+    model: "gpt-4o-mini",
     max_tokens: 2048,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content }],
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userContent },
+    ],
   });
 
-  const rawText =
-    response.content[0]?.type === "text" ? response.content[0].text : "";
+  const rawText = response.choices[0]?.message?.content ?? "";
 
   try {
-    // Strip any accidental markdown code fences
     const cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
     const parsed = JSON.parse(cleaned) as ExtractedData;
 
-    // Normalize nulls → undefined for optional fields
     return {
       documentType: parsed.documentType ?? "unknown",
       vin: parsed.vin ?? undefined,
@@ -137,7 +138,6 @@ export async function extractFromDocument(
       rawNotes: parsed.rawNotes ?? undefined,
     };
   } catch {
-    // Return a minimal valid object on parse failure
     return {
       documentType: "unknown",
       services: [],

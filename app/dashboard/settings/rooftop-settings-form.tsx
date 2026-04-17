@@ -4,17 +4,35 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Building2, Wrench, DollarSign } from "lucide-react";
+import { Building2, Wrench, DollarSign, Hash } from "lucide-react";
+
+const US_TIMEZONES = [
+  { label: "Eastern Time",                   value: "America/New_York"   },
+  { label: "Central Time",                   value: "America/Chicago"    },
+  { label: "Mountain Time",                  value: "America/Denver"     },
+  { label: "Mountain Time (Arizona, no DST)", value: "America/Phoenix"   },
+  { label: "Pacific Time",                   value: "America/Los_Angeles"},
+  { label: "Alaska Time",                    value: "America/Anchorage"  },
+  { label: "Hawaii Time",                    value: "Pacific/Honolulu"   },
+];
 
 const OEM_OPTIONS = ["GM", "Ford", "Toyota", "Honda", "Stellantis", "BMW", "Mercedes"];
 
-type Tab = "dealership" | "oem" | "pricing";
+type Tab = "dealership" | "oem" | "pricing" | "ronumbering";
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "dealership", label: "Dealership Info", icon: Building2 },
   { id: "oem", label: "OEM Lines", icon: Wrench },
   { id: "pricing", label: "Labor & Pricing", icon: DollarSign },
+  { id: "ronumbering", label: "RO Numbering", icon: Hash },
 ];
 
 type Rooftop = {
@@ -27,6 +45,9 @@ type Rooftop = {
   shopSupplyCap: number;
   timezone: string;
   pricingMatrix: { tiers: string }[] | null;
+  roNumberPrefix: string | null;
+  roNumberNext: number;
+  roNumberPadding: number;
 };
 
 export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
@@ -38,6 +59,9 @@ export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
     shopSupplyPct: Math.round(rooftop.shopSupplyPct * 100),
     shopSupplyCap: rooftop.shopSupplyCap,
     timezone: rooftop.timezone,
+    roNumberPrefix: rooftop.roNumberPrefix ?? "",
+    roNumberNext: rooftop.roNumberNext,
+    roNumberPadding: rooftop.roNumberPadding,
   });
 
   const [oems, setOems] = useState<string[]>(() => {
@@ -75,6 +99,9 @@ export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
         shopSupplyCap: form.shopSupplyCap,
         timezone: form.timezone,
         oems,
+        roNumberPrefix: form.roNumberPrefix || null,
+        roNumberNext: form.roNumberNext,
+        roNumberPadding: form.roNumberPadding,
       }),
     });
 
@@ -133,11 +160,22 @@ export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
               </div>
               <div className="space-y-1">
                 <Label>Timezone</Label>
-                <Input
+                <Select
                   value={form.timezone}
-                  onChange={(e) => setForm((p) => ({ ...p, timezone: e.target.value }))}
-                  placeholder="America/Chicago"
-                />
+                  onValueChange={(v) => setForm((p) => ({ ...p, timezone: v ?? p.timezone }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select timezone…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {US_TIMEZONES.map((tz) => (
+                      <SelectItem key={tz.value} value={tz.value}>
+                        {tz.label}
+                        <span className="ml-1 text-muted-foreground text-xs">({tz.value})</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}
@@ -224,6 +262,64 @@ export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
               <p className="text-xs text-muted-foreground">
                 Shop supply fee = min(subtotal &times; {form.shopSupplyPct}%, ${form.shopSupplyCap} cap)
               </p>
+            </div>
+          )}
+
+          {activeTab === "ronumbering" && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-base font-semibold text-foreground mb-1">RO Numbering</h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Configure how repair order numbers are formatted. Use the &quot;Next number&quot; field to continue from a previous system.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label>Prefix</Label>
+                  <Input
+                    placeholder="e.g. RO-, WO, or leave blank"
+                    maxLength={10}
+                    value={form.roNumberPrefix}
+                    onChange={(e) => setForm((p) => ({ ...p, roNumberPrefix: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">Letters, numbers, and hyphens only</p>
+                </div>
+                <div className="space-y-1">
+                  <Label>Digit padding</Label>
+                  <Select
+                    value={String(form.roNumberPadding)}
+                    onValueChange={(v) => setForm((p) => ({ ...p, roNumberPadding: parseInt(v ?? "0") }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[3, 4, 5, 6, 7, 8].map((n) => (
+                        <SelectItem key={n} value={String(n)}>{n} digits</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Next number</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={form.roNumberNext}
+                  onChange={(e) => setForm((p) => ({ ...p, roNumberNext: parseInt(e.target.value) || 1 }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Set this to continue from a previous system (e.g. enter 10543 to pick up where you left off)
+                </p>
+              </div>
+              <div className="px-4 py-3 bg-surface border border-border rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Preview</p>
+                <p className="text-sm font-mono font-semibold text-foreground">
+                  Next RO will be: {(form.roNumberPrefix || "") + String(form.roNumberNext).padStart(form.roNumberPadding, "0")}
+                </p>
+              </div>
             </div>
           )}
 

@@ -26,6 +26,21 @@ import {
   Megaphone,
   Sun,
   Moon,
+  CalendarDays,
+  HardHat,
+  UserSearch,
+  Kanban,
+  Package,
+  // [FEATURE: tech_time_clock] START
+  Clock,
+  TrendingUp,
+  // [FEATURE: tech_time_clock] END
+  // [FEATURE: core_return_tracking] START
+  RotateCcw,
+  // [FEATURE: core_return_tracking] END
+  // [FEATURE: canned_inspections] START
+  ClipboardCheck,
+  // [FEATURE: canned_inspections] END
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GlobalChatPanel } from "@/components/global-chat-panel";
@@ -45,26 +60,53 @@ type NavGroup = {
 
 const navGroups: NavGroup[] = [
   {
+    // Technician-only group
+    roles: ["technician"],
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "New RO", href: "/dashboard/ro/new", icon: Car },
-      { label: "Repair Orders", href: "/dashboard/ro", icon: ClipboardList },
-      { label: "Document Ingest", href: "/dashboard/ingest", icon: Upload },
-      { label: "Announcements", href: "/dashboard/announcements", icon: Megaphone },
-      { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3, roles: ["admin", "manager"] },
+      { label: "My Dashboard",   href: "/dashboard/tech",           icon: HardHat },
+      { label: "My Jobs",        href: "/dashboard/ro",             icon: ClipboardList },
+      { label: "Announcements",  href: "/dashboard/announcements",  icon: Megaphone },
+      // [FEATURE: tech_time_clock] START
+      { label: "Time Clock",     href: "/dashboard/tech/time-clock", icon: Clock, roles: ["technician"] },
+      // [FEATURE: tech_time_clock] END
+    ],
+  },
+  {
+    // Advisor+ group (hidden from technicians)
+    roles: ["admin", "manager", "advisor", "developer"],
+    items: [
+      { label: "Dashboard",      href: "/dashboard",                icon: LayoutDashboard },
+      { label: "New RO",         href: "/dashboard/ro/new",         icon: Car },
+      { label: "Repair Orders",  href: "/dashboard/ro",             icon: ClipboardList },
+      { label: "Customers",      href: "/dashboard/customers",      icon: UserSearch },
+      { label: "Calendar",       href: "/dashboard/calendar",       icon: CalendarDays },
+      { label: "Document Ingest",href: "/dashboard/ingest",         icon: Upload },
+      { label: "Inventory",      href: "/dashboard/inventory",      icon: Package },
+      { label: "Announcements",  href: "/dashboard/announcements",  icon: Megaphone },
+      // [FEATURE: core_return_tracking] START
+      { label: "Part Returns",   href: "/dashboard/inventory/returns", icon: RotateCcw, roles: ["admin", "manager", "advisor"] },
+      // [FEATURE: core_return_tracking] END
+      { label: "Tech Board",     href: "/dashboard/tech-board",     icon: Kanban,   roles: ["admin", "manager", "advisor"] },
+      { label: "Analytics",      href: "/dashboard/analytics",      icon: BarChart3, roles: ["admin", "manager"] },
     ],
   },
   {
     label: "Admin",
     roles: ["admin", "manager"],
     items: [
-      { label: "Org Overview", href: "/dashboard/org", icon: Building2 },
-      { label: "Rules", href: "/dashboard/admin/rules", icon: Wrench },
-      { label: "Import",        href: "/dashboard/admin/import",   icon: DatabaseZap,  roles: ["admin"] },
-      { label: "DMS Config",    href: "/dashboard/admin/dms",      icon: Plug,         roles: ["admin"] },
-      { label: "Feature Flags", href: "/dashboard/admin/flags",    icon: ToggleLeft,   roles: ["admin"] },
-      { label: "Pricing",       href: "/dashboard/admin/pricing",  icon: DollarSign },
-      { label: "Users",         href: "/dashboard/admin/users",    icon: Users,        roles: ["admin"] },
+      { label: "Org Overview",   href: "/dashboard/org",             icon: Building2 },
+      { label: "Rules",          href: "/dashboard/admin/rules",     icon: Wrench },
+      { label: "Import",         href: "/dashboard/admin/import",    icon: DatabaseZap, roles: ["admin"] },
+      { label: "DMS Config",     href: "/dashboard/admin/dms",       icon: Plug,        roles: ["admin"] },
+      { label: "Feature Flags",  href: "/dashboard/admin/flags",     icon: ToggleLeft,  roles: ["admin"] },
+      { label: "Pricing",        href: "/dashboard/admin/pricing",   icon: DollarSign },
+      // [FEATURE: tech_time_clock] START
+      { label: "Tech Efficiency", href: "/dashboard/admin/reports/tech-efficiency", icon: TrendingUp, roles: ["admin", "manager"] },
+      // [FEATURE: tech_time_clock] END
+      // [FEATURE: canned_inspections] START
+      { label: "Inspections",    href: "/dashboard/admin/inspections", icon: ClipboardCheck, roles: ["admin", "manager"] },
+      // [FEATURE: canned_inspections] END
+      { label: "Users",          href: "/dashboard/admin/users",     icon: Users,       roles: ["admin"] },
     ],
   },
   {
@@ -75,9 +117,15 @@ const navGroups: NavGroup[] = [
 ];
 
 // Tab bar priority items — shown on mobile bottom nav (max 5)
-const TAB_BAR_HREFS = [
+const TAB_BAR_HREFS_ADVISOR = [
   "/dashboard",
   "/dashboard/ro/new",
+  "/dashboard/ro",
+  "/dashboard/announcements",
+  "/dashboard/settings",
+];
+const TAB_BAR_HREFS_TECH = [
+  "/dashboard/tech",
   "/dashboard/ro",
   "/dashboard/announcements",
   "/dashboard/settings",
@@ -157,7 +205,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     .filter((item) => pathname === item.href || pathname.startsWith(item.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
-  const tabBarItems = TAB_BAR_HREFS
+  const tabBarHrefs = role === "technician" ? TAB_BAR_HREFS_TECH : TAB_BAR_HREFS_ADVISOR;
+  const tabBarItems = tabBarHrefs
     .map((href) => allVisibleItems.find((item) => item.href === href))
     .filter((item): item is NavItem => item !== undefined)
     .slice(0, 5);

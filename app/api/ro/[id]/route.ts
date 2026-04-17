@@ -53,6 +53,14 @@ const patchSchema = z.object({
   notes: z.string().optional(),
   wizardStep: z.number().int().min(1).max(5).optional(),
   status: z.enum(["presented", "approved", "closed", "void"]).optional(),
+  // Scheduling & assignment
+  scheduledAt: z.string().datetime({ offset: true }).optional().nullable(),
+  estimatedDuration: z.number().int().min(0).optional().nullable(),
+  assignedTechId: z.string().optional().nullable(),
+  // Customer info
+  customerName: z.string().optional().nullable(),
+  customerPhone: z.string().optional().nullable(),
+  customerEmail: z.string().email().optional().nullable(),
   lineItemOverrides: z
     .array(
       z.object({
@@ -156,9 +164,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const { lineItemId } = parsedRemove.data;
     const item = ro.lineItems.find((li) => li.id === lineItemId);
     if (!item) return NextResponse.json({ error: "Line item not found" }, { status: 404 });
-    if (item.source !== "manual") {
-      return NextResponse.json({ error: "Only manually-added items can be removed" }, { status: 400 });
-    }
 
     await db.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.rOLineItem.delete({ where: { id: lineItemId } });
@@ -184,10 +189,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request" }, { status: 400 });
   }
 
-  const { notes, wizardStep, status, lineItemOverrides } = parsed.data;
+  const {
+    notes, wizardStep, status, lineItemOverrides,
+    scheduledAt, estimatedDuration, assignedTechId,
+    customerName, customerPhone, customerEmail,
+  } = parsed.data;
 
-  // Guard: content edits only allowed on draft
-  if (!status && ro.status !== "draft") {
+  const isSchedulingUpdate = scheduledAt !== undefined || estimatedDuration !== undefined
+    || assignedTechId !== undefined || customerName !== undefined
+    || customerPhone !== undefined || customerEmail !== undefined;
+
+  // Guard: content edits only allowed on draft (scheduling updates are always allowed)
+  if (!status && !isSchedulingUpdate && ro.status !== "draft") {
     return NextResponse.json({ error: "Cannot modify a non-draft RO" }, { status: 400 });
   }
 
@@ -252,8 +265,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     // Apply scalar updates
     const roUpdates: Record<string, unknown> = {};
-    if (notes !== undefined)      roUpdates.notes = notes;
-    if (wizardStep !== undefined) roUpdates.wizardStep = wizardStep;
+    if (notes !== undefined)             roUpdates.notes = notes;
+    if (wizardStep !== undefined)        roUpdates.wizardStep = wizardStep;
+    if (scheduledAt !== undefined)       roUpdates.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
+    if (estimatedDuration !== undefined) roUpdates.estimatedDuration = estimatedDuration;
+    if (assignedTechId !== undefined)    roUpdates.assignedTechId = assignedTechId;
+    if (customerName !== undefined)      roUpdates.customerName = customerName;
+    if (customerPhone !== undefined)     roUpdates.customerPhone = customerPhone;
+    if (customerEmail !== undefined)     roUpdates.customerEmail = customerEmail;
     if (status !== undefined) {
       roUpdates.status = status;
       if (status === "presented") roUpdates.presentedAt = new Date();
@@ -279,6 +298,26 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       });
     }
   });
+
+  // [FEATURE: inventory_ro_integration] START
+  // Auto-decrement inventory when RO is approved (fire-and-forget, non-blocking)
+  if (status === "approved") {
+    (async () => {
+      try {
+        const { flagEnabled } = await import("@/lib/flags/evaluate");
+        const invEnabled = await flagEnabled("inventory_ro_integration" as any, user.rooftopId!);
+        if (invEnabled) {
+          const { decrementStockForRO } = await import("@/lib/inventory/ro-integration");
+          await db.$transaction(async (tx) => {
+            await decrementStockForRO(id, user.rooftopId!, user.id, tx);
+          });
+        }
+      } catch (err) {
+        console.error("[inventory_ro_integration] Decrement error for RO", id, err);
+      }
+    })();
+  }
+  // [FEATURE: inventory_ro_integration] END
 
   // Fire-and-forget DMS sync when RO is approved
   if (status === "approved") {

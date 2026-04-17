@@ -94,8 +94,19 @@ export async function POST(req: NextRequest) {
     rooftop.shopSupplyCap
   );
 
-  // Create RO + line items in a transaction
+  // Create RO + line items in a transaction (atomically assigns roNumber)
   const ro = await db.$transaction(async (tx: Prisma.TransactionClient) => {
+    // Atomically claim the next RO number for this rooftop
+    const updatedRooftop = await tx.rooftop.update({
+      where: { id: user.rooftopId! },
+      data: { roNumberNext: { increment: 1 } },
+      select: { roNumberNext: true, roNumberPrefix: true, roNumberPadding: true },
+    });
+    const seq = updatedRooftop.roNumberNext - 1; // value before increment
+    const prefix = updatedRooftop.roNumberPrefix ?? "";
+    const padding = updatedRooftop.roNumberPadding ?? 5;
+    const roNumber = `${prefix}${String(seq).padStart(padding, "0")}`;
+
     const newRo = await tx.repairOrder.create({
       data: {
         rooftopId: user.rooftopId!,
@@ -103,6 +114,7 @@ export async function POST(req: NextRequest) {
         vin: vehicle.vin,
         vehicleSnapshot: JSON.stringify(vehicle),
         currentMileage: mileage,
+        roNumber,
         status: "draft",
         wizardStep: 3,
         partsSubtotal: summary.partsSubtotal,
@@ -148,7 +160,22 @@ export async function POST(req: NextRequest) {
     return newRo;
   });
 
-  return NextResponse.json({ ro: { id: ro.id, status: ro.status, totalAmount: ro.totalAmount } }, { status: 201 });
+  // [FEATURE: canned_inspections] START
+  (async () => {
+    try {
+      const { flagEnabled } = await import("@/lib/flags/evaluate");
+      const enabled = await flagEnabled("canned_inspections", user.rooftopId);
+      if (enabled && mileage > 0) {
+        const { autoAttachInspections } = await import("@/lib/inspections/auto-attach");
+        await autoAttachInspections(ro.id, mileage, user.rooftopId!, user.id);
+      }
+    } catch (err) {
+      console.error("[canned_inspections] autoAttachInspections failed for RO", ro.id, err);
+    }
+  })();
+  // [FEATURE: canned_inspections] END
+
+  return NextResponse.json({ ro: { id: ro.id, roNumber: ro.roNumber, status: ro.status, totalAmount: ro.totalAmount } }, { status: 201 });
 }
 
 // GET /api/ro — list ROs for the current rooftop
@@ -161,12 +188,15 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
+  const techId = searchParams.get("techId");
   const limit = Math.min(100, parseInt(searchParams.get("limit") ?? "50", 10));
 
   const ros = await db.repairOrder.findMany({
     where: {
       rooftopId: user.rooftopId,
       ...(status ? { status } : {}),
+      // techId=me filters to ROs assigned to the requesting user (technician view)
+      ...(techId === "me" ? { assignedTechId: user.id } : {}),
     },
     include: {
       advisor: { select: { name: true, email: true } },

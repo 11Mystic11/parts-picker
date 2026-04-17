@@ -5,7 +5,13 @@ import { put } from "@vercel/blob";
 import { prisma } from "@/lib/db";
 import { extractFromDocument } from "@/lib/ingest/extract";
 
-const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
+const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf"];
+
+// Normalize non-standard MIME aliases
+function normalizeMime(mime: string): string {
+  if (mime === "image/jpg") return "image/jpeg";
+  return mime;
+}
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export async function POST(req: NextRequest) {
@@ -45,9 +51,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "File exceeds 10 MB limit." }, { status: 400 });
   }
 
+  const mimeType = normalizeMime(file.type);
+
   // Upload to Vercel Blob
   const blobName = `ingest/${rooftopId}/${Date.now()}-${file.name}`;
-  const blob = await put(blobName, file, { access: "public" });
+  let blob: Awaited<ReturnType<typeof put>>;
+  try {
+    blob = await put(blobName, file, { access: "public" });
+  } catch (err) {
+    return NextResponse.json(
+      { error: "Storage upload failed. Please try again." },
+      { status: 500 }
+    );
+  }
 
   // Read buffer for Claude
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -58,7 +74,7 @@ export async function POST(req: NextRequest) {
   let errorMessage: string | undefined;
 
   try {
-    const result = await extractFromDocument(buffer, file.type);
+    const result = await extractFromDocument(buffer, mimeType);
     extractedData = result;
   } catch (err) {
     status = "error";
@@ -72,7 +88,7 @@ export async function POST(req: NextRequest) {
       uploadedById,
       blobUrl: blob.url,
       fileName: file.name,
-      mimeType: file.type,
+      mimeType,
       status,
       extractedData: extractedData ? JSON.stringify(extractedData) : null,
       errorMessage,

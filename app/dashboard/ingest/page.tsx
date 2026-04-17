@@ -426,7 +426,7 @@ export default function IngestPage() {
       <input
         ref={cameraInputRef}
         type="file"
-        accept="image/*"
+        accept="image/png,image/jpeg,image/webp"
         capture="environment"
         className="hidden"
         onChange={onFileChange}

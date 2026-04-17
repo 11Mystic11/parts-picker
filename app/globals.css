@@ -191,6 +191,11 @@ h1, h2, h3 {
   border: 1px solid var(--glass-border-color);
 }
 
+/* react-big-calendar — dark mode today column highlight */
+.dark .rbc-today {
+  background-color: oklch(0.55 0.2 264.376 / 10%) !important;
+}
+
 /* Custom scrollbar for dark panels */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;

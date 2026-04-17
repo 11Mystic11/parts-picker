@@ -22,6 +22,55 @@ const FLAG_LABELS: Record<string, { label: string; description: string }> = {
     description:
       "Progressive rollout of Phase 10 tablet-optimised UI (touch targets, camera capture, bottom nav). Roll out per rooftop.",
   },
+  // [FEATURE: customer_approval_portal] START
+  customer_approval_portal: {
+    label: "Customer Approval Portal",
+    description:
+      "Send customers a magic-link (SMS + email) to approve or decline individual RO line items remotely. No customer login required.",
+  },
+  // [FEATURE: customer_approval_portal] END
+  // [FEATURE: dvi] START
+  dvi: {
+    label: "Digital Vehicle Inspection",
+    description:
+      "Allow technicians to attach photos, videos, and condition ratings (OK / Advisory / Critical) to each RO line item via the DVI tab.",
+  },
+  // [FEATURE: dvi] END
+  // [FEATURE: tech_time_clock] START
+  tech_time_clock: {
+    label: "Technician Time Clock",
+    description:
+      "Technicians clock in/out per labor operation. Tracks actual vs flat-rate hours and feeds the Tech Efficiency report.",
+  },
+  // [FEATURE: tech_time_clock] END
+  // [FEATURE: parts_ordering] START
+  parts_ordering: {
+    label: "Parts Ordering Integration",
+    description:
+      "Search NAPA and AutoZone parts catalogs and submit orders directly from the RO. Requires supplier credentials in rooftop config.",
+  },
+  // [FEATURE: parts_ordering] END
+  // [FEATURE: core_return_tracking] START
+  core_return_tracking: {
+    label: "Core / Warranty Return Tracking",
+    description:
+      "Track parts returned to supplier for core charges or warranty credit. Status pipeline: pending → submitted → received → credited / rejected.",
+  },
+  // [FEATURE: core_return_tracking] END
+  // [FEATURE: canned_inspections] START
+  canned_inspections: {
+    label: "Canned Inspections",
+    description:
+      "Multi-point inspection templates (brakes, tires, fluids) automatically attached to new ROs based on vehicle mileage intervals.",
+  },
+  // [FEATURE: canned_inspections] END
+  // [FEATURE: inventory_ro_integration] START
+  inventory_ro_integration: {
+    label: "Inventory ↔ RO Integration",
+    description:
+      "Show low-stock warnings on part line items when presenting an RO. Auto-decrement on-hand quantity when an RO is approved.",
+  },
+  // [FEATURE: inventory_ro_integration] END
 };
 
 type FlagEntry = { enabled: boolean; scope: "rooftop" | "global" | "default" };

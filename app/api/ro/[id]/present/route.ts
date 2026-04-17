@@ -43,5 +43,19 @@ export async function POST(_req: NextRequest, { params }: Params) {
     return result;
   });
 
-  return NextResponse.json({ ro: { id: updated.id, status: updated.status, presentedAt: updated.presentedAt } });
+  // [FEATURE: inventory_ro_integration] START
+  let stockWarnings: unknown[] = [];
+  try {
+    const { flagEnabled } = await import("@/lib/flags/evaluate");
+    const invEnabled = await flagEnabled("inventory_ro_integration" as any, user.rooftopId);
+    if (invEnabled) {
+      const { checkStockForRO } = await import("@/lib/inventory/ro-integration");
+      stockWarnings = await checkStockForRO(id, user.rooftopId!);
+    }
+  } catch (err) {
+    console.error("[inventory_ro_integration] checkStockForRO failed for RO", id, err);
+  }
+  // [FEATURE: inventory_ro_integration] END
+
+  return NextResponse.json({ ro: { id: updated.id, status: updated.status, presentedAt: updated.presentedAt }, stockWarnings });
 }
