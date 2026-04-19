@@ -14,6 +14,9 @@ import { getMockAdapter } from "./mock";
 type SupplierConfig = {
   napa?: { apiKey: string; accountId: string; storeId?: string };
   autozone?: { apiKey: string; storeNumber: string };
+  orielly?: { apiKey: string; accountNumber: string; storeId?: string };
+  worldpac?: { username: string; password: string; warehouseId?: string };
+  partstech?: { apiKey: string; shopId: string };
 };
 
 export function getSupplierAdapter(
@@ -37,6 +40,18 @@ export function getSupplierAdapter(
     case "AUTOZONE": {
       const { getAutoZoneAdapter } = require("./autozone");
       return getAutoZoneAdapter(config.autozone ?? { apiKey: "", storeNumber: "" });
+    }
+    case "ORIELLY": {
+      const { getOReillyAdapter } = require("./orielly");
+      return getOReillyAdapter(config.orielly ?? { apiKey: "", accountNumber: "" });
+    }
+    case "WORLDPAC": {
+      const { getWorldpacAdapter } = require("./worldpac");
+      return getWorldpacAdapter(config.worldpac ?? { username: "", password: "" });
+    }
+    case "PARTSTECH": {
+      const { getPartsTechAdapter } = require("./partstech");
+      return getPartsTechAdapter(config.partstech ?? { apiKey: "", shopId: "" });
     }
     default:
       return getMockAdapter();

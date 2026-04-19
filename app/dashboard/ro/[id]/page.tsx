@@ -7,6 +7,9 @@ import { ChevronLeft, Car } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { RODetailClient } from "./ro-detail-client";
 import { ROScheduleForm } from "./ro-schedule-form";
+// [FEATURE: recall_check] START
+import { RecallBanner } from "@/components/ro/recall-banner";
+// [FEATURE: recall_check] END
 // [FEATURE: dvi] START
 import { DVISummary } from "@/components/dvi/dvi-summary";
 // [FEATURE: dvi] END
@@ -38,6 +41,7 @@ export default async function RODetailPage({ params }: Props) {
         lineItems: { orderBy: { sortOrder: "asc" } },
         advisor: { select: { name: true, email: true } },
         assignedTech: { select: { id: true, name: true } },
+        // [FEATURE: recall_check] — openRecallCount and recallCheckedAt are selected automatically
         overrides: {
           orderBy: { createdAt: "desc" },
           include: { advisor: { select: { name: true } } },
@@ -106,6 +110,10 @@ export default async function RODetailPage({ params }: Props) {
           </p>
         </div>
       </div>
+
+      {/* [FEATURE: recall_check] START */}
+      <RecallBanner roId={ro.id} initialCount={ro.openRecallCount ?? null} />
+      {/* [FEATURE: recall_check] END */}
 
       {/* Vehicle card */}
       <div className="flex items-start gap-4 p-4 glass border border-border/50 rounded-lg mb-6">

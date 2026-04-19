@@ -191,9 +191,97 @@ h1, h2, h3 {
   border: 1px solid var(--glass-border-color);
 }
 
-/* react-big-calendar — dark mode today column highlight */
+/* react-big-calendar — comprehensive dark mode overrides */
+.dark .rbc-calendar {
+  color-scheme: dark;
+  background: transparent;
+  color: oklch(0.97 0 0);
+}
+.dark .rbc-month-view,
+.dark .rbc-time-view,
+.dark .rbc-agenda-view {
+  background: transparent;
+  border-color: oklch(1 0 0 / 10%);
+}
+.dark .rbc-header {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: oklch(1 0 0 / 10%) !important;
+  color: oklch(0.97 0 0);
+}
+.dark .rbc-month-row,
+.dark .rbc-month-row + .rbc-month-row {
+  border-color: oklch(1 0 0 / 10%) !important;
+}
+.dark .rbc-day-bg {
+  background: transparent !important;
+}
+.dark .rbc-day-bg + .rbc-day-bg,
+.dark .rbc-day-slot .rbc-time-slot {
+  border-color: oklch(1 0 0 / 10%) !important;
+}
+.dark .rbc-off-range-bg {
+  background: rgba(255, 255, 255, 0.02) !important;
+}
 .dark .rbc-today {
   background-color: oklch(0.55 0.2 264.376 / 10%) !important;
+}
+.dark .rbc-date-cell,
+.dark .rbc-date-cell a {
+  color: oklch(0.60 0 0);
+}
+.dark .rbc-date-cell.rbc-now a {
+  color: oklch(0.97 0 0);
+}
+.dark .rbc-show-more {
+  color: oklch(0.55 0.2 264.376);
+  background: transparent;
+}
+.dark .rbc-time-header-content,
+.dark .rbc-time-content {
+  border-color: oklch(1 0 0 / 10%) !important;
+}
+.dark .rbc-timeslot-group {
+  border-color: oklch(1 0 0 / 10%) !important;
+}
+.dark .rbc-time-slot {
+  border-color: oklch(1 0 0 / 6%) !important;
+}
+.dark .rbc-label,
+.dark .rbc-agenda-date-cell,
+.dark .rbc-agenda-time-cell {
+  color: oklch(0.60 0 0);
+}
+.dark .rbc-agenda-event-cell {
+  color: oklch(0.97 0 0);
+}
+.dark .rbc-agenda-table {
+  border-color: oklch(1 0 0 / 10%);
+}
+.dark .rbc-agenda-table tbody > tr > td + td,
+.dark .rbc-agenda-table tbody > tr + tr {
+  border-color: oklch(1 0 0 / 10%) !important;
+}
+.dark .rbc-agenda-empty {
+  color: oklch(0.60 0 0);
+}
+.dark .rbc-current-time-indicator {
+  background-color: oklch(0.55 0.2 264.376);
+}
+.dark .rbc-row-segment .rbc-event,
+.dark .rbc-time-slot .rbc-event {
+  border: none;
+}
+.dark .rbc-selected-cell {
+  background: oklch(0.55 0.2 264.376 / 15%);
+}
+/* Remove default white backgrounds that slip through */
+.dark .rbc-overlay {
+  background: oklch(0.10 0 0);
+  border-color: oklch(1 0 0 / 10%);
+  color: oklch(0.97 0 0);
+}
+.dark .rbc-event-label {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* Custom scrollbar for dark panels */

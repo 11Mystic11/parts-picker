@@ -14,6 +14,8 @@ const createSchema = z.object({
   mileage: z.number().int().min(0),
   selectedServiceIds: z.array(z.string()).min(1),
   notes: z.string().optional(),
+  // [FEATURE: ro_type] — "customer" | "warranty" | "internal"
+  roType: z.enum(["customer", "warranty", "internal"]).optional(),
 });
 
 // POST /api/ro — create a draft RO with line items
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { vin, mileage, selectedServiceIds, notes } = parsed.data;
+  const { vin, mileage, selectedServiceIds, notes, roType } = parsed.data;
 
   // Load vehicle from cache
   const cached = await db.vehicleCache.findUnique({ where: { vin: vin.toUpperCase() } });
@@ -100,12 +102,13 @@ export async function POST(req: NextRequest) {
     const updatedRooftop = await tx.rooftop.update({
       where: { id: user.rooftopId! },
       data: { roNumberNext: { increment: 1 } },
-      select: { roNumberNext: true, roNumberPrefix: true, roNumberPadding: true },
+      select: { roNumberNext: true, roNumberPrefix: true, roNumberAlphaGroup: true, roNumberPadding: true } as const,
     });
     const seq = updatedRooftop.roNumberNext - 1; // value before increment
     const prefix = updatedRooftop.roNumberPrefix ?? "";
+    const alphaGroup = updatedRooftop.roNumberAlphaGroup ?? "";
     const padding = updatedRooftop.roNumberPadding ?? 5;
-    const roNumber = `${prefix}${String(seq).padStart(padding, "0")}`;
+    const roNumber = `${prefix}${alphaGroup}${String(seq).padStart(padding, "0")}`;
 
     const newRo = await tx.repairOrder.create({
       data: {
@@ -123,6 +126,8 @@ export async function POST(req: NextRequest) {
         taxAmount: summary.taxAmount,
         totalAmount: summary.total,
         notes: notes ?? null,
+        // [FEATURE: ro_type]
+        roType: roType ?? "customer",
       },
     });
 

@@ -31,6 +31,12 @@ import {
   UserSearch,
   Kanban,
   Package,
+  Search,
+  ShoppingCart,
+  AlertTriangle,
+  Shield,
+  Car as CarIcon,
+  Award,
   // [FEATURE: tech_time_clock] START
   Clock,
   TrendingUp,
@@ -44,6 +50,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GlobalChatPanel } from "@/components/global-chat-panel";
+import { CommandPalette } from "@/components/command-palette";
+import { NotificationBell } from "@/components/notification-bell";
 
 type NavItem = {
   label: string;
@@ -84,10 +92,25 @@ const navGroups: NavGroup[] = [
       { label: "Inventory",      href: "/dashboard/inventory",      icon: Package },
       { label: "Announcements",  href: "/dashboard/announcements",  icon: Megaphone },
       // [FEATURE: core_return_tracking] START
-      { label: "Part Returns",   href: "/dashboard/inventory/returns", icon: RotateCcw, roles: ["admin", "manager", "advisor"] },
+      { label: "Part Returns",   href: "/dashboard/inventory/returns",      icon: RotateCcw, roles: ["admin", "manager", "advisor"] },
       // [FEATURE: core_return_tracking] END
-      { label: "Tech Board",     href: "/dashboard/tech-board",     icon: Kanban,   roles: ["admin", "manager", "advisor"] },
-      { label: "Analytics",      href: "/dashboard/analytics",      icon: BarChart3, roles: ["admin", "manager"] },
+      // [FEATURE: special_orders] START
+      { label: "Special Orders", href: "/dashboard/inventory/special-orders", icon: ShoppingCart, roles: ["admin", "manager", "advisor"] },
+      // [FEATURE: special_orders] END
+      // [FEATURE: backorder_tracking] START
+      { label: "Backorders",     href: "/dashboard/inventory/backorders",   icon: AlertTriangle, roles: ["admin", "manager", "advisor"] },
+      // [FEATURE: backorder_tracking] END
+      // [FEATURE: parts_queue] START
+      { label: "Parts Queue",    href: "/dashboard/parts-requests",         icon: Package, roles: ["admin", "manager", "advisor"] },
+      // [FEATURE: parts_queue] END
+      { label: "Tech Board",     href: "/dashboard/tech-board",             icon: Kanban,   roles: ["admin", "manager", "advisor"] },
+      // [FEATURE: warranty_claims] START
+      { label: "Warranty Claims",href: "/dashboard/warranty",               icon: Shield, roles: ["admin", "manager", "advisor"] },
+      // [FEATURE: warranty_claims] END
+      // [FEATURE: loaner_vehicles] START
+      { label: "Loaners",        href: "/dashboard/loaners",                icon: CarIcon, roles: ["admin", "manager", "advisor"] },
+      // [FEATURE: loaner_vehicles] END
+      { label: "Analytics",      href: "/dashboard/analytics",              icon: BarChart3, roles: ["admin", "manager"] },
     ],
   },
   {
@@ -103,13 +126,30 @@ const navGroups: NavGroup[] = [
       // [FEATURE: tech_time_clock] START
       { label: "Tech Efficiency", href: "/dashboard/admin/reports/tech-efficiency", icon: TrendingUp, roles: ["admin", "manager"] },
       // [FEATURE: tech_time_clock] END
+      // [FEATURE: tech_pay] START
+      { label: "Tech Pay",       href: "/dashboard/admin/reports/tech-pay", icon: DollarSign, roles: ["admin", "manager"] },
+      // [FEATURE: tech_pay] END
+      // [FEATURE: lost_sales] START
+      { label: "Lost Sales",     href: "/dashboard/admin/reports/lost-sales", icon: BarChart3, roles: ["admin", "manager"] },
+      // [FEATURE: lost_sales] END
+      // [FEATURE: purchase_orders] START
+      { label: "Purchase Orders", href: "/dashboard/inventory/purchase-orders", icon: ShoppingCart, roles: ["admin", "manager"] },
+      // [FEATURE: purchase_orders] END
+      // [FEATURE: parts_analytics] START
+      { label: "Parts Analytics", href: "/dashboard/analytics/parts", icon: BarChart3, roles: ["admin", "manager"] },
+      // [FEATURE: parts_analytics] END
       // [FEATURE: canned_inspections] START
       { label: "Inspections",    href: "/dashboard/admin/inspections", icon: ClipboardCheck, roles: ["admin", "manager"] },
       // [FEATURE: canned_inspections] END
+      { label: "Certifications", href: "/dashboard/admin/certifications", icon: Award, roles: ["admin", "manager"] },
+      // [FEATURE: fleet_accounts] START
+      { label: "Fleet Accounts", href: "/dashboard/admin/fleet-accounts", icon: Building2, roles: ["admin", "manager"] },
+      // [FEATURE: fleet_accounts] END
       { label: "Users",          href: "/dashboard/admin/users",     icon: Users,       roles: ["admin"] },
     ],
   },
   {
+    roles: ["admin", "manager", "advisor", "developer"],
     items: [
       { label: "Settings", href: "/dashboard/settings", icon: Settings },
     ],
@@ -128,7 +168,6 @@ const TAB_BAR_HREFS_TECH = [
   "/dashboard/tech",
   "/dashboard/ro",
   "/dashboard/announcements",
-  "/dashboard/settings",
 ];
 
 function RooftopSwitcher() {
@@ -287,6 +326,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               </p>
               <p className="text-xs text-muted-foreground capitalize">{role}</p>
             </div>
+            <NotificationBell />
           </div>
 
           {/* Theme toggle */}
@@ -318,7 +358,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* ── Main content ────────────────────────────────────────────────── */}
-      <main className="flex-1 relative flex flex-col min-w-0 overflow-y-auto pb-16 md:pb-0 bg-gray-100 dark:bg-[#000000] z-0">
+      <main className="flex-1 relative flex flex-col min-w-0 overflow-y-auto overflow-x-hidden pb-16 md:pb-0 bg-gray-100 dark:bg-[#000000] z-0">
         {/* Ambient gradient orbs — every page gets these */}
         <div className="pointer-events-none absolute top-[-8%] left-[-5%] w-[55%] h-[55%] bg-primary/5 dark:bg-primary/10 blur-[130px] rounded-full -z-10" aria-hidden />
         <div className="pointer-events-none absolute bottom-[-8%] right-[-5%] w-[45%] h-[45%] bg-primary/3 dark:bg-primary/5 blur-[110px] rounded-full -z-10" aria-hidden />
@@ -327,6 +367,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* ── Persistent global chat panel ────────────────────────────────── */}
       <GlobalChatPanel />
+
+      {/* ── Global command palette (Ctrl+K / Cmd+K) ─────────────────────── */}
+      <CommandPalette />
 
       {/* ── Bottom tab bar (mobile only) ────────────────────────────────── */}
       <nav

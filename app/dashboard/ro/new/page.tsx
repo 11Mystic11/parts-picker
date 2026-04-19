@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, lazy } from "react";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { lookupOEM, type VehicleData } from "@/lib/vin/normalize";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,14 @@ import {
   PenLine,
   Wrench,
   Package,
+  ScanBarcode,
 } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const BarcodeScanner = dynamic(
+  () => import("@/components/scanner/barcode-scanner").then((m) => ({ default: m.BarcodeScanner })),
+  { ssr: false }
+);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -214,11 +222,21 @@ function OTPRSection({
 
 function NewROPageInner() {
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
+  const router = useRouter();
+
+  // Block technicians from accessing this page
+  useEffect(() => {
+    if ((session?.user as any)?.role === "technician") {
+      router.replace("/dashboard/tech");
+    }
+  }, [session, router]);
 
   // Phase A — VIN entry
   const [vin, setVin] = useState("");
   const [vinLoading, setVinLoading] = useState(false);
   const [vinError, setVinError] = useState("");
+  const [showVinScanner, setShowVinScanner] = useState(false);
   const [vehicle, setVehicle] = useState<VehicleData | null>(null);
 
   // Manual entry fallback (shown when NHTSA is unreachable)
@@ -280,7 +298,6 @@ function NewROPageInner() {
   // Phase D — Save as draft
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const router = useRouter();
 
   // ── VIN decode ────────────────────────────────────────────────────────────
   async function handleVinLookup() {
@@ -574,6 +591,16 @@ function NewROPageInner() {
             className="font-mono tracking-widest text-base"
           />
           <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="flex-shrink-0 px-3"
+            onClick={() => setShowVinScanner(true)}
+            title="Scan VIN barcode"
+          >
+            <ScanBarcode className="h-5 w-5" />
+          </Button>
+          <Button
             onClick={handleVinLookup}
             disabled={vinLoading || vin.trim().length !== 17}
             size="lg"
@@ -587,6 +614,19 @@ function NewROPageInner() {
             Look Up
           </Button>
         </div>
+
+        {showVinScanner && (
+          <BarcodeScanner
+            hint="Scan the VIN barcode on the driver door jamb"
+            onScan={(result) => {
+              const cleaned = result.replace(/[^A-HJ-NPR-Z0-9]/gi, "").toUpperCase().slice(0, 17);
+              setVin(cleaned);
+              setVinError("");
+              setShowVinScanner(false);
+            }}
+            onClose={() => setShowVinScanner(false)}
+          />
+        )}
         {!vehicle && !showManual && (
           <button
             type="button"

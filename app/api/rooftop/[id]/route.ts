@@ -15,6 +15,7 @@ const schema = z.object({
   mfaRequired: z.boolean().optional(),
   // RO numbering
   roNumberPrefix: z.string().max(10).optional().nullable(),
+  roNumberAlphaGroup: z.string().max(4).optional().nullable(),
   roNumberNext: z.number().int().min(1).optional(),
   roNumberPadding: z.number().int().min(3).max(9).optional(),
 });

@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { RooftopSettingsForm } from "./rooftop-settings-form";
 import { MFASettingsSection } from "./mfa-settings-section";
+import { AppearanceSection } from "./appearance-section";
 import { redirect } from "next/navigation";
 
 export default async function SettingsPage() {
@@ -10,6 +11,7 @@ export default async function SettingsPage() {
   const user = session?.user as any;
   const rooftopId = user?.rooftopId;
   if (!rooftopId) redirect("/auth/signin");
+  if (user?.role === "technician") redirect("/dashboard/tech");
 
   const [rooftop, mfaRecord] = await Promise.all([
     prisma.rooftop.findUnique({
@@ -28,6 +30,11 @@ export default async function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground mb-6">Rooftop Settings</h1>
         <RooftopSettingsForm rooftop={rooftop} />
+      </div>
+
+      <div>
+        <h2 className="text-xl font-bold text-foreground mb-4">Appearance</h2>
+        <AppearanceSection />
       </div>
 
       <div>

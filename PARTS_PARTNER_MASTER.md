@@ -590,3 +590,438 @@ parts-picker/
 │   └── schema.prisma
 └── middleware.ts            # Route protection
 ```
+
+---
+
+## Features Built Beyond Phase 12
+
+These are fully implemented and in the codebase but were not part of the original 12-phase spec. All schema models, API routes, and UI pages exist.
+
+---
+
+### Inventory Management ✅
+
+**Pages:** `/dashboard/inventory`, `/dashboard/inventory/returns`
+**Schema:** `PartInventory`, `InventoryMovement`
+
+Per-rooftop parts stock management. Each part has a bin location, quantity on hand, reorder point, reorder quantity, supplier, unit cost, and sell price. Every stock change (receive, use, adjust, return) is recorded as an `InventoryMovement` for a full audit trail. The RO workflow automatically decrements stock when parts are marked used. The inventory page lets advisors/managers search by part number or description, add new items, edit quantities, and see movement history. Low-stock items (on hand ≤ reorder point) are flagged.
+
+**Key files:**
+
+- `app/dashboard/inventory/page.tsx` + `inventory-client.tsx`
+- `app/dashboard/inventory/returns/page.tsx` — core/warranty returns pipeline
+- `app/api/inventory/route.ts` — `GET/POST /api/inventory`
+- `app/api/inventory/[id]/route.ts` — `GET/PATCH/DELETE`
+- `lib/inventory/ro-integration.ts` — stock decrement hook called when RO closes
+
+---
+
+### Customer Approval Portal ✅
+
+**Pages:** `/portal/[token]`
+**Schema:** `ROApprovalToken`, `ROLineItemDecision`
+
+When an advisor presents an RO, they can generate a shareable link for the customer. The customer opens the link (no login required) and sees the full estimate with every line item. They approve or decline each item individually, add their name, and submit. The advisor is notified when decisions come in. Decisions are recorded on `ROLineItemDecision` and reflected back in the RO. Tokens expire after 72 hours and are single-use.
+
+**Key files:**
+
+- `app/api/ro/[id]/approval-token/route.ts` — generate token
+- `app/api/ro/[id]/present/route.ts` — mark RO as presented + trigger token
+- `app/api/portal/[token]/route.ts` — public: fetch RO for customer
+- `app/api/portal/[token]/decide/route.ts` — public: submit decisions
+- `lib/approval/send-link.ts` — link generation helper
+
+---
+
+### Digital Vehicle Inspection (DVI) ✅
+
+**Pages:** `/dashboard/ro/[id]/dvi`
+**Schema:** `DVIReport`, `DVIItem`
+
+Technician-facing inspection capture tool. When a tech opens a DVI for an RO, a report is auto-created with one item per line item on the RO. The tech sets each item's condition (`ok` / `advisory` / `critical`), adds notes, and uploads photos directly from their device. Photos are stored in Vercel Blob. The DVI is accessed from the RO detail page and shows a live status (`in_progress` / `complete`). Advisors can see the completed DVI when reviewing the RO.
+
+**Key files:**
+
+- `app/dashboard/ro/[id]/dvi/page.tsx`
+- `app/api/ro/[id]/dvi/route.ts` — `GET/PATCH`
+- `app/api/ro/[id]/dvi/items/[itemId]/route.ts` — update individual item
+- `app/api/ro/[id]/dvi/items/[itemId]/upload/route.ts` — photo upload to Vercel Blob
+- `components/dvi/dvi-capture.tsx` — capture UI
+- `lib/dvi/create-report.ts` — auto-creates report from RO line items
+
+---
+
+### Tech Time Clock ✅
+
+**Pages:** `/dashboard/tech/time-clock`
+**Schema:** `TimeEntry`
+
+Technicians clock in and out per RO (and optionally per labor op). Each `TimeEntry` records start time, end time, the associated RO, the specific line item (labor op), and the flat-rate hours from the OEM schedule. This lets the system calculate actual time vs. flat-rate sold — the core efficiency metric. Today's entries and a running clock are shown on the time clock page. Managers can view efficiency reports at `/dashboard/admin/reports/tech-efficiency`.
+
+**Key files:**
+
+- `app/dashboard/tech/time-clock/page.tsx`
+- `app/api/ro/[id]/time-entries/route.ts` — `GET/POST`
+- `app/api/reports/tech-efficiency/route.ts` — aggregated efficiency stats
+- `app/dashboard/admin/reports/tech-efficiency/page.tsx`
+- `lib/timeclock/efficiency.ts` — actual vs. flat-rate hour calculations
+
+---
+
+### Parts Ordering Integration ✅
+
+**Pages:** RO detail → "Order Parts" panel
+**Schema:** `PartsOrder`
+
+From within an RO, advisors/parts staff can search for parts at NAPA and AutoZone and submit an order without leaving the app. The system searches by part number or description, returns availability and pricing, and records the order as a `PartsOrder` linked to the RO. Order status flows: `pending → submitted → confirmed | error`. A mock adapter exists for development. The factory pattern (`lib/parts-ordering/factory.ts`) makes it easy to add more suppliers.
+
+**Key files:**
+
+- `app/api/parts-ordering/search/route.ts` — search across suppliers
+- `app/api/ro/[id]/parts-orders/route.ts` — `GET/POST`
+- `app/api/ro/[id]/parts-orders/[orderId]/route.ts` — status update
+- `lib/parts-ordering/adapter.ts` — `PartsOrderingAdapter` interface
+- `lib/parts-ordering/napa.ts` — NAPA adapter
+- `lib/parts-ordering/autozone.ts` — AutoZone adapter
+- `lib/parts-ordering/mock.ts` — mock adapter for dev/testing
+
+---
+
+### Core & Warranty Return Tracking ✅
+
+**Pages:** `/dashboard/inventory/returns`
+**Schema:** `PartReturn`
+
+Tracks parts returned to suppliers for credit — both core returns (rebuildable part swaps) and warranty returns (defective part claims). Each return record captures part number, supplier, return type, expected credit amount, tracking number, and moves through a status pipeline: `pending → submitted → received → credited | rejected`. When a return is credited, the actual credit amount is recorded. A pipeline summary at the top of the returns page shows counts and total pending credit value by status.
+
+**Key files:**
+
+- `app/dashboard/inventory/returns/page.tsx`
+- `app/api/part-returns/route.ts` — `GET/POST`
+- `app/api/part-returns/[id]/route.ts` — `PATCH` (status advancement)
+- `app/api/ro/[id]/part-returns/route.ts` — create return from RO line item
+- `components/returns/return-form.tsx`
+- `components/returns/return-status-badge.tsx`
+
+---
+
+### Canned Inspections ✅
+
+**Pages:** `/dashboard/ro/[id]/inspections`, `/dashboard/admin/inspections`
+**Schema:** `InspectionTemplate`, `InspectionTemplateItem`, `RoInspection`, `InspectionResult`
+
+Admins define reusable multi-point inspection templates (e.g. "30-Point Safety Check", "Pre-Delivery Inspection"). Each template has items with a check type: `condition` (ok/advisory/critical), `passfail` (pass/fail), or `measurement` (numeric with unit). Templates can optionally auto-attach to ROs when mileage falls within a configurable window of a trigger mileage. Techs complete inspections per RO, item by item. Results are stored per-inspection. Completed inspections are visible on the RO detail page.
+
+**Key files:**
+
+- `app/dashboard/ro/[id]/inspections/page.tsx`
+- `app/dashboard/admin/inspections/page.tsx`
+- `app/api/inspection-templates/route.ts` — `GET/POST`
+- `app/api/inspection-templates/[id]/route.ts` — `GET/PATCH/DELETE`
+- `app/api/ro/[id]/inspections/route.ts` — `GET/POST`
+- `app/api/ro/[id]/inspections/[inspId]/route.ts` — update results
+- `lib/inspections/auto-attach.ts` — mileage-triggered auto-attach logic
+
+---
+
+### Tech Dashboard ✅
+
+**Pages:** `/dashboard/tech`
+**Role:** `technician` only
+
+A simplified, role-gated dashboard for technicians. Shows only the ROs assigned to them, their time clock status, and quick links to DVI and inspections. Techs do not see the full advisor/manager dashboard. Redirects automatically if a non-tech tries to access it.
+
+---
+
+### Tech Board ✅
+
+**Pages:** `/dashboard/tech-board`
+**Role:** advisor, manager, admin
+
+A live operations view showing all technicians at the rooftop and their currently assigned ROs in card columns. Each tech card shows their active RO count, the vehicles they're working on, labor ops with flat-rate hours, parts needed, and the RO dollar value. Useful for dispatchers and service managers to see shop load at a glance and identify idle techs. Refreshes on demand.
+
+**Key files:**
+
+- `app/dashboard/tech-board/page.tsx`
+- `app/api/tech-board/route.ts`
+
+---
+
+### Customer Lookup ✅
+
+**Pages:** `/dashboard/customers`
+
+Search customers by name, phone number, or VIN. Results show every vehicle associated with that customer (matched across ROs by contact info), lifetime spend, visit count, and last visit date. Expanding a customer card shows their full service history — every RO with status, date, services performed, and total. Each RO links directly to the RO detail page. This is a read-only lookup that aggregates across ROs rather than a separate `Customer` table.
+
+**Key files:**
+
+- `app/dashboard/customers/page.tsx`
+- `app/api/customers/search/route.ts`
+
+---
+
+### RO Messaging ✅
+
+**Schema:** `ROMessage`
+
+Threaded internal communication per RO. Three message categories: `message` (internal advisor/tech chat), `note` (formal dealer-wide log entry), `external` (customer-facing communication record). Visible on the RO detail page. Used to keep a full communication trail for every job without relying on text messages or email that lives outside the system.
+
+**Key files:**
+
+- `app/api/ro/[id]/messages/route.ts` — `GET/POST`
+- Schema: `ROMessage` with `authorId`, `category`, `content`
+
+---
+
+### Announcements ✅
+
+**Pages:** `/dashboard/announcements`
+**Schema:** `Announcement`
+
+Admins and managers can post rooftop-wide announcements with three priority levels: `info`, `warning`, `urgent`. Announcements can have an expiry date, after which they're no longer shown. All staff at the rooftop see them. Used for shift notes, policy changes, supplier alerts, or time-sensitive operational notices.
+
+**Key files:**
+
+- `app/dashboard/announcements/page.tsx`
+- `app/api/announcements/route.ts` — `GET/POST`
+- `app/api/announcements/[id]/route.ts` — `PATCH/DELETE`
+
+---
+
+### Appointment Calendar ✅
+
+**Pages:** `/dashboard/calendar`
+**Schema:** `scheduledAt`, `estimatedDuration` on `RepairOrder`
+
+A calendar view of all scheduled ROs for the rooftop. ROs with a `scheduledAt` date appear as events. Service advisors and managers can schedule appointments when creating or editing an RO, set an estimated duration, and assign a tech. The calendar respects the rooftop's configured timezone. Technicians are redirected away from the calendar to their tech dashboard.
+
+**Key files:**
+
+- `app/dashboard/calendar/page.tsx` + `calendar-client.tsx`
+- `app/api/calendar/events/route.ts` — returns scheduled ROs as calendar events
+
+---
+
+### RO Numbering ✅
+
+**Schema:** `roNumberPrefix`, `roNumberNext`, `roNumberPadding` on `Rooftop`; `roNumber` on `RepairOrder`
+
+Human-readable RO numbers assigned sequentially at creation. Configurable prefix (e.g. `RO-`, `WO-`, or blank), zero-padding width (e.g. 5 digits → `00042`), and starting number. The `roNumber` field is unique and appears on the RO list, detail page, PDF, and anywhere an RO is referenced. Configured per rooftop in admin settings.
+
+---
+
+### Stock Check on RO ✅
+
+**API:** `GET /api/ro/[id]/stock-check`
+
+When an RO is in the review step of the wizard, the system checks current inventory for each part line item and returns availability status. Advisors see which parts are in stock vs. need to be ordered before committing to the customer. Integrates with the `PartInventory` table.
+
+---
+
+## Roadmap — Ideas to Build Next
+
+These are not built. Ordered by estimated impact for the primary user (parts manager / service advisor at a dealership or independent shop).
+
+---
+
+### 1. NHTSA Safety Recall Integration
+
+**Impact: High | Effort: Low**
+
+The NHTSA provides a completely free recall API (`api.nhtsa.gov/recalls/recallsByVehicle`). Every time a VIN is decoded or an RO is opened, automatically check for open recall campaigns and display them. Show campaign number, affected component, remedy status, and a badge on the RO if open recalls exist. Add a "Recall Addressed" toggle so advisors can document that they informed the customer. This is a compliance and liability issue — advisors are supposed to check this on every vehicle intake, and currently they have to leave the app to do it.
+
+---
+
+### 2. Special Order Parts (SOP) Workflow
+
+**Impact: High | Effort: Medium**
+
+A dedicated lifecycle for parts ordered specifically for a customer. SOPs are currently tracked on whiteboards or spreadsheets in most shops. The workflow:
+
+- Create an SOP record tied to a customer and optionally an RO
+- Track deposit collected, vendor PO, supplier ETA
+- Status pipeline: `ordered → received → customer_notified → picked_up`
+- When the part arrives, notify the customer automatically and flag the waiting RO
+- SOP report: all outstanding orders by age, flagging anything past ETA
+
+---
+
+### 3. Backorder Tracking & ETA Management
+
+**Impact: High | Effort: Low-Medium**
+
+The parts ordering integration submits orders but has no backorder awareness — it's fire and forget. Add a backorder flag to `PartsOrder` with an ETA date (manually entered or from supplier API). Surface a "Backorder Report" showing all open backorders sorted by age. When a part clears backorder, notify the advisor assigned to that RO. Add a "Source Elsewhere" action that opens a new parts search pre-filled with the same part number.
+
+---
+
+### 4. Global Search / Command Palette
+
+**Impact: High | Effort: Low**
+
+A `Ctrl+K` / `Cmd+K` command palette that searches across ROs (by number, VIN, customer name), inventory (by part number or description), and navigates to any page in the app. `shadcn/ui` ships `cmdk` which makes this straightforward to implement. Parts managers and advisors look things up constantly — having to navigate to the right section first adds up to a lot of friction across a full shift.
+
+---
+
+### 5. In-App Notification Center
+
+**Impact: High | Effort: Medium**
+
+A bell icon in the sidebar nav with an unread count. Add a `Notification` model (`userId`, `title`, `body`, `type`, `entityId`, `readAt`). Event types to generate notifications:
+
+- `ro_approved` — customer approved the estimate
+- `parts_arrived` — SOP or backorder cleared
+- `dms_sync_failed` — DMS push failed, needs manual attention
+- `inspection_flagged` — a DVI item marked critical
+- `recall_found` — open recall on a vehicle being checked in
+Notifications are role-targeted: techs get RO updates, parts manager gets order/inventory events, advisors get approval decisions.
+
+---
+
+### 6. Multi-Point Inspection PDF (Customer-Facing)
+
+**Impact: High | Effort: Medium**
+
+The canned inspection data and DVI photos already exist — there's no customer-facing output. Generate a branded PDF (or a shareable public URL) showing the completed inspection in traffic-light format (green/yellow/red per item) with tech notes and any photos from the DVI. This is one of the most proven upsell tools in service — customers approve more work when they see a photo of the worn brake pad or the cracked serpentine belt.
+
+---
+
+### 7. Lost Sales Tracking
+
+**Impact: Medium-High | Effort: Low**
+
+When a customer declines a line item through the approval portal or an advisor manually marks it rejected, capture a decline reason: `price`, `time_constraint`, `will_return`, `did_elsewhere`, `other`. Add a "Lost Sales" report that aggregates declined revenue by category, by advisor, and by reason over a date range. This is a KPI most shops don't track at all and is usually $50K–$200K/year in deferred revenue that management doesn't know is leaving.
+
+---
+
+### 8. Purchase Orders for Inventory Replenishment
+
+**Impact: Medium-High | Effort: Medium**
+
+A separate PO workflow for stocking orders, distinct from the RO-attached parts ordering. Add a `PurchaseOrder` model with `PurchaseOrderItem` lines, supplier, status (`draft → submitted → partial_received → received → invoiced`), and a receiving workflow. Auto-suggest POs by finding all `PartInventory` items where `quantityOnHand ≤ reorderPoint`, grouped by supplier. Receiving a PO auto-adjusts inventory quantities.
+
+---
+
+### 9. Parts Profitability & Fill Rate Analytics
+
+**Impact: Medium-High | Effort: Medium**
+
+A dedicated parts analytics section with KPIs that don't exist anywhere in the current analytics dashboard:
+
+- **Fill rate**: % of part line items pulled from stock vs. ordered — industry target is >70%
+- **Gross profit by category**: which categories (Filters, Brakes, Fluids, etc.) have the best margin
+- **Inventory turns**: how many times per year each category turns over
+- **Slow/dead stock**: parts with no movement in 90/180/365 days, with total value tied up
+- **Core recovery rate**: % of cores successfully credited vs. charged but not recovered
+
+---
+
+### 10. Barcode & VIN Scanning
+
+**Impact: Medium-High | Effort: Low**
+
+Use `@zxing/browser` or `html5-qrcode` to scan barcodes and QR codes from the device camera. Three use cases:
+
+- Scan the VIN barcode from the windshield sticker (door jamb label) into the VIN field on the RO wizard — eliminates the biggest source of typos
+- Scan a part number barcode into the inventory search or parts order fields
+- Scan a bin location barcode during inventory counts
+
+This is a high-payoff tablet feature. The camera capture infrastructure from the DVI and document ingest work is already in place.
+
+---
+
+### 11. Warranty Claims Tracker
+
+**Impact: Medium | Effort: Medium**
+
+OEM warranty work is a meaningful revenue stream at dealerships with its own tracking needs. Add a warranty flag to ROs with fields: claim number, failure description, OEM labor code, parts used, submitted date, expected reimbursement amount. Status pipeline: `draft → submitted → approved → paid | rejected`. Track rejection reasons and resubmission outcomes. Add warranty revenue as a separate line in the analytics dashboard, isolated from customer-pay. Errors in warranty claim submission and tracking are a known source of revenue leakage.
+
+---
+
+### 12. SMS Customer Notifications
+
+**Impact: Medium | Effort: Medium**
+
+Twilio integration (or similar) for outbound SMS:
+
+- "Your estimate is ready — approve here: [link]" when RO is presented (includes approval portal link)
+- "Your vehicle is ready for pickup" when RO is closed
+- "Your special order part has arrived" when SOP status → `received`
+Opt-in stored on customer record. Message templates configurable per rooftop. Delivery log on the RO. Customers expect text updates — this is a table-stakes feature for modern shops.
+
+---
+
+### 13. Technician Pay Summary
+
+**Impact: Medium | Effort: Low**
+
+The time clock tracks flat-rate hours already. Close the loop to payroll by adding a weekly/bi-weekly tech pay summary:
+
+- Flat-rate hours produced from closed ROs
+- Actual hours clocked in (from `TimeEntry`)
+- Efficiency ratio: flat-rate sold ÷ actual hours (100% = tech produced exactly as many hours as they worked)
+- Breakdown by pay type: customer-pay, warranty, internal
+- CSV export for payroll import
+
+Most service managers do this manually in a spreadsheet each pay period.
+
+---
+
+### 14. Dark Mode
+
+**Impact: Medium | Effort: Low-Medium**
+
+Parts counters and shop floors are often dimly lit. Techs on tablets in the bay have bright screens in their faces. Tailwind + shadcn/ui support dark mode via the `class` strategy — adding it is a focused CSS theming pass. Include a toggle in user settings with an "auto" option that follows system preference.
+
+---
+
+### 15. Parts Request Queue (Bay → Counter)
+
+**Impact: Medium | Effort: Low**
+
+A lightweight request board for technicians to submit part needs from the bay without walking to the counter or radioing. Add a `PartsRequest` model: tech submits a request with RO number, part description/number, quantity, and urgency. The parts counter sees a live queue sorted by urgency and RO. Counter staff mark requests as `pulled` or `ordering`. Tech gets notified when their parts are on the way. Reduces radio traffic and the constant interruptions at the parts counter.
+
+---
+
+### 16. Loaner Vehicle Management
+
+**Impact: Medium | Effort: Medium**
+
+Many service departments have a fleet of customer loaner cars with no tracking system. Add a `LoanerVehicle` model (VIN, make/model/year, license plate, status: `available | loaned | in_service`). A `LoanerLoan` record ties a loaner to a customer RO with check-out and expected return date, fuel level, and mileage in/out. Photo capture at check-out and check-in for damage documentation (using existing DVI-style photo upload). Overdue alerts when a loaner isn't returned on time.
+
+---
+
+### 17. Technician Certification Tracker
+
+**Impact: Medium | Effort: Low**
+
+Add certification records per tech: ASE certification type (A1–A9, L1, etc.), OEM training, expiry date. Alert managers when a cert is within 90 days of expiry. Optionally enforce that certain labor operations can only be assigned to techs with the relevant certification — important for OEM warranty work, which often requires documented technician qualifications.
+
+---
+
+### 18. Fleet Account Management
+
+**Impact: Medium | Effort: Medium**
+
+Fleet customers (delivery companies, municipalities, rental agencies) have multiple vehicles and need centralized billing. A `FleetAccount` model with:
+
+- Multiple vehicles tied to one account
+- Custom pricing matrix override (different markup tiers from retail)
+- Billing cycle: weekly or monthly batch invoice of all closed ROs
+- Required PO number per RO (some fleet accounts require this before work starts)
+- Fleet dashboard: all vehicles, open ROs, outstanding balance
+
+---
+
+### 19. Service Interval Reminders (Outbound)
+
+**Impact: Medium | Effort: Medium**
+
+The system knows the last service mileage and what was done per VIN. With an assumed annual mileage (configurable or estimated from RO history), calculate when the next service interval is due and send an email or SMS reminder in advance. Configurable per rooftop: which services trigger reminders, how far in advance, opt-in/opt-out management. This is a passive revenue generation tool — shops typically see a 15–25% response rate on well-timed service reminders.
+
+---
+
+### 20. Internal / Reconditioning RO Type
+
+**Impact: Low-Medium | Effort: Low**
+
+When the shop works on its own vehicles (loaner fleet maintenance, used car reconditioning, shop trucks), those ROs should not be priced at retail and should not inflate customer-pay revenue in analytics. Add a billing mode field on ROs: `retail`, `internal`, `warranty`. Internal ROs use cost-only pricing (no markup). Analytics reports break out revenue by billing type. Used car reconditioning is a significant operation at dealerships and is currently invisible in the system.

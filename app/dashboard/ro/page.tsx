@@ -69,12 +69,15 @@ export default function RepairOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [resyncing, setResyncing] = useState<string | null>(null);
 
+  const isTech = role === "technician";
+
   useEffect(() => {
-    fetch("/api/ro?limit=100")
+    const url = isTech ? "/api/ro?limit=100&techId=me" : "/api/ro?limit=100";
+    fetch(url)
       .then((r) => r.json())
       .then((d: { ros: RO[] }) => setRos(d.ros ?? []))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isTech]);
 
   async function handleResync(roId: string) {
     setResyncing(roId);
@@ -113,27 +116,35 @@ export default function RepairOrdersPage() {
     <div className="p-6 max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Repair Orders</h1>
-          <p className="text-muted-foreground mt-0.5 text-sm">All ROs for your service location.</p>
+          <h1 className="text-2xl font-bold text-foreground">
+            {isTech ? "My Jobs" : "Repair Orders"}
+          </h1>
+          <p className="text-muted-foreground mt-0.5 text-sm">
+            {isTech ? "Jobs assigned to you." : "All ROs for your service location."}
+          </p>
         </div>
-        <Button onClick={() => router.push("/dashboard/ro/new")} id="new-ro-btn">
-          <Plus className="h-4 w-4 mr-2" />
-          New RO
-        </Button>
+        {!isTech && (
+          <Button onClick={() => router.push("/dashboard/ro/new")} id="new-ro-btn">
+            <Plus className="h-4 w-4 mr-2" />
+            New RO
+          </Button>
+        )}
       </div>
 
       {enriched.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center text-muted-foreground">
           <ClipboardList className="h-12 w-12 mb-4 opacity-30" />
-          <p className="text-lg font-medium">No repair orders yet</p>
-          <p className="text-sm mt-1">Create your first RO to get started.</p>
-          <Button onClick={() => router.push("/dashboard/ro/new")} className="mt-6">
-            <Plus className="h-4 w-4 mr-2" /> New Repair Order
-          </Button>
+          <p className="text-lg font-medium">{isTech ? "No jobs assigned to you" : "No repair orders yet"}</p>
+          <p className="text-sm mt-1">{isTech ? "Your assigned jobs will appear here." : "Create your first RO to get started."}</p>
+          {!isTech && (
+            <Button onClick={() => router.push("/dashboard/ro/new")} className="mt-6">
+              <Plus className="h-4 w-4 mr-2" /> New Repair Order
+            </Button>
+          )}
         </div>
       ) : (
-        <div className="border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="border border-border rounded-lg overflow-hidden overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-surface border-b border-border">
               <tr>
                 <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">RO #</th>

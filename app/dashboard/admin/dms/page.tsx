@@ -23,7 +23,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-type Provider = "none" | "cdk" | "reynolds";
+type Provider = "none" | "cdk" | "reynolds" | "dealertrack" | "dealersocket" | "pbs" | "mitchell1";
 
 interface ConfigState {
   dmsProvider: Provider | null;
@@ -59,6 +59,20 @@ export default function DMSConfigPage() {
   // Reynolds fields
   const [reynoldsApiKey, setReynoldsApiKey] = useState("");
   const [reynoldsDealerCode, setReynoldsDealerCode] = useState("");
+  // DealerTrack fields
+  const [dtClientId, setDtClientId] = useState("");
+  const [dtClientSecret, setDtClientSecret] = useState("");
+  const [dtDealerId, setDtDealerId] = useState("");
+  // DealerSocket fields
+  const [dsApiKey, setDsApiKey] = useState("");
+  const [dsDealerCode, setDsDealerCode] = useState("");
+  // PBS fields
+  const [pbsUsername, setPbsUsername] = useState("");
+  const [pbsPassword, setPbsPassword] = useState("");
+  const [pbsDealerNumber, setPbsDealerNumber] = useState("");
+  // Mitchell 1 fields
+  const [m1ApiKey, setM1ApiKey] = useState("");
+  const [m1ShopId, setM1ShopId] = useState("");
 
   // Sync stats
   const [stats, setStats] = useState<SyncStat[]>([]);
@@ -117,8 +131,16 @@ export default function DMSConfigPage() {
       body = { dmsProvider: "none" };
     } else if (provider === "cdk") {
       body = { dmsProvider: "cdk", clientId: cdkClientId, clientSecret: cdkClientSecret, dealerNumber: cdkDealerNumber };
-    } else {
+    } else if (provider === "reynolds") {
       body = { dmsProvider: "reynolds", apiKey: reynoldsApiKey, dealerCode: reynoldsDealerCode };
+    } else if (provider === "dealertrack") {
+      body = { dmsProvider: "dealertrack", clientId: dtClientId, clientSecret: dtClientSecret, dealerId: dtDealerId };
+    } else if (provider === "dealersocket") {
+      body = { dmsProvider: "dealersocket", apiKey: dsApiKey, dealerCode: dsDealerCode };
+    } else if (provider === "pbs") {
+      body = { dmsProvider: "pbs", username: pbsUsername, password: pbsPassword, dealerNumber: pbsDealerNumber };
+    } else {
+      body = { dmsProvider: "mitchell1", apiKey: m1ApiKey, shopId: m1ShopId };
     }
 
     try {
@@ -217,22 +239,28 @@ export default function DMSConfigPage() {
         <div className="space-y-2">
           <Label className="text-sm font-semibold">DMS Provider</Label>
           <p className="text-xs text-muted-foreground">Select your dealer management system.</p>
-          <div className="grid grid-cols-3 gap-3 mt-2">
-            {(["none", "cdk", "reynolds"] as Provider[]).map((p) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
+            {([
+              { value: "none", label: "No DMS" },
+              { value: "cdk", label: "CDK Global" },
+              { value: "reynolds", label: "Reynolds & Reynolds" },
+              { value: "dealertrack", label: "DealerTrack" },
+              { value: "dealersocket", label: "DealerSocket" },
+              { value: "pbs", label: "PBS Systems" },
+              { value: "mitchell1", label: "Mitchell 1" },
+            ] as { value: Provider; label: string }[]).map((p) => (
               <button
-                key={p}
-                onClick={() => { setProvider(p); setTestResult(null); }}
+                key={p.value}
+                onClick={() => { setProvider(p.value); setTestResult(null); }}
                 className={[
                   "relative rounded-lg border-2 p-3 text-sm font-medium transition-colors text-center",
-                  provider === p
+                  provider === p.value
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-border bg-background text-foreground hover:border-primary/50",
                 ].join(" ")}
               >
-                {p === "none" && "No DMS"}
-                {p === "cdk" && "CDK Global"}
-                {p === "reynolds" && "Reynolds & Reynolds"}
-                {config.dmsProvider === p && p !== "none" && (
+                {p.label}
+                {config.dmsProvider === p.value && p.value !== "none" && (
                   <span className="absolute top-1 right-1">
                     <CheckCircle2 className="h-3 w-3 text-green-500" />
                   </span>
@@ -292,6 +320,82 @@ export default function DMSConfigPage() {
               <div>
                 <Label htmlFor="rr-dealer-code" className="text-xs">Dealer Code</Label>
                 <Input id="rr-dealer-code" value={reynoldsDealerCode} onChange={(e) => setReynoldsDealerCode(e.target.value)} placeholder="e.g. DEALER-0042" className="mt-1 font-mono text-sm" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DealerTrack Fields */}
+        {provider === "dealertrack" && (
+          <div className="space-y-4 border-t pt-4">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">DealerTrack Credentials</p>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="dt-client-id" className="text-xs">Client ID</Label>
+                <Input id="dt-client-id" value={dtClientId} onChange={(e) => setDtClientId(e.target.value)} placeholder="OAuth client ID" className="mt-1 font-mono text-sm" />
+              </div>
+              <div>
+                <Label htmlFor="dt-client-secret" className="text-xs">Client Secret</Label>
+                <Input id="dt-client-secret" type="password" value={dtClientSecret} onChange={(e) => setDtClientSecret(e.target.value)} placeholder="••••••••" className="mt-1 font-mono text-sm" />
+              </div>
+              <div>
+                <Label htmlFor="dt-dealer-id" className="text-xs">Dealer ID</Label>
+                <Input id="dt-dealer-id" value={dtDealerId} onChange={(e) => setDtDealerId(e.target.value)} placeholder="e.g. DLR-12345" className="mt-1 font-mono text-sm" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DealerSocket Fields */}
+        {provider === "dealersocket" && (
+          <div className="space-y-4 border-t pt-4">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">DealerSocket Credentials</p>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="ds-api-key" className="text-xs">API Key</Label>
+                <Input id="ds-api-key" type="password" value={dsApiKey} onChange={(e) => setDsApiKey(e.target.value)} placeholder="••••••••" className="mt-1 font-mono text-sm" />
+              </div>
+              <div>
+                <Label htmlFor="ds-dealer-code" className="text-xs">Dealer Code</Label>
+                <Input id="ds-dealer-code" value={dsDealerCode} onChange={(e) => setDsDealerCode(e.target.value)} placeholder="e.g. DS-0042" className="mt-1 font-mono text-sm" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PBS Fields */}
+        {provider === "pbs" && (
+          <div className="space-y-4 border-t pt-4">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">PBS Systems Credentials</p>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="pbs-username" className="text-xs">Username</Label>
+                <Input id="pbs-username" value={pbsUsername} onChange={(e) => setPbsUsername(e.target.value)} placeholder="PBS login username" className="mt-1 font-mono text-sm" />
+              </div>
+              <div>
+                <Label htmlFor="pbs-password" className="text-xs">Password</Label>
+                <Input id="pbs-password" type="password" value={pbsPassword} onChange={(e) => setPbsPassword(e.target.value)} placeholder="••••••••" className="mt-1 font-mono text-sm" />
+              </div>
+              <div>
+                <Label htmlFor="pbs-dealer-number" className="text-xs">Dealer Number</Label>
+                <Input id="pbs-dealer-number" value={pbsDealerNumber} onChange={(e) => setPbsDealerNumber(e.target.value)} placeholder="e.g. PBS-0042" className="mt-1 font-mono text-sm" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mitchell 1 Fields */}
+        {provider === "mitchell1" && (
+          <div className="space-y-4 border-t pt-4">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Mitchell 1 Credentials</p>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="m1-api-key" className="text-xs">API Key</Label>
+                <Input id="m1-api-key" type="password" value={m1ApiKey} onChange={(e) => setM1ApiKey(e.target.value)} placeholder="••••••••" className="mt-1 font-mono text-sm" />
+              </div>
+              <div>
+                <Label htmlFor="m1-shop-id" className="text-xs">Shop ID</Label>
+                <Input id="m1-shop-id" value={m1ShopId} onChange={(e) => setM1ShopId(e.target.value)} placeholder="e.g. SHOP-1234" className="mt-1 font-mono text-sm" />
               </div>
             </div>
           </div>

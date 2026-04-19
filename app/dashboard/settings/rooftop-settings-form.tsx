@@ -46,6 +46,7 @@ type Rooftop = {
   timezone: string;
   pricingMatrix: { tiers: string }[] | null;
   roNumberPrefix: string | null;
+  roNumberAlphaGroup: string | null;
   roNumberNext: number;
   roNumberPadding: number;
 };
@@ -60,6 +61,7 @@ export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
     shopSupplyCap: rooftop.shopSupplyCap,
     timezone: rooftop.timezone,
     roNumberPrefix: rooftop.roNumberPrefix ?? "",
+    roNumberAlphaGroup: rooftop.roNumberAlphaGroup ?? "",
     roNumberNext: rooftop.roNumberNext,
     roNumberPadding: rooftop.roNumberPadding,
   });
@@ -100,6 +102,7 @@ export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
         timezone: form.timezone,
         oems,
         roNumberPrefix: form.roNumberPrefix || null,
+        roNumberAlphaGroup: form.roNumberAlphaGroup || null,
         roNumberNext: form.roNumberNext,
         roNumberPadding: form.roNumberPadding,
       }),
@@ -285,6 +288,16 @@ export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
                   <p className="text-xs text-muted-foreground">Letters, numbers, and hyphens only</p>
                 </div>
                 <div className="space-y-1">
+                  <Label>Letter group</Label>
+                  <Input
+                    placeholder="e.g. A, B, or leave blank"
+                    maxLength={4}
+                    value={form.roNumberAlphaGroup}
+                    onChange={(e) => setForm((p) => ({ ...p, roNumberAlphaGroup: e.target.value.toUpperCase() }))}
+                  />
+                  <p className="text-xs text-muted-foreground">Optional letters before the digits (e.g. A → RO-A00001)</p>
+                </div>
+                <div className="space-y-1">
                   <Label>Digit padding</Label>
                   <Select
                     value={String(form.roNumberPadding)}
@@ -317,7 +330,7 @@ export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
               <div className="px-4 py-3 bg-surface border border-border rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Preview</p>
                 <p className="text-sm font-mono font-semibold text-foreground">
-                  Next RO will be: {(form.roNumberPrefix || "") + String(form.roNumberNext).padStart(form.roNumberPadding, "0")}
+                  Next RO will be: {(form.roNumberPrefix || "") + (form.roNumberAlphaGroup || "") + String(form.roNumberNext).padStart(form.roNumberPadding, "0")}
                 </p>
               </div>
             </div>

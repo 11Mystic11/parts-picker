@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -58,6 +59,7 @@ import { ApprovalSendDialog } from "@/components/ro/approval-send-dialog";
 // [FEATURE: customer_approval_portal] END
 // [FEATURE: parts_ordering] START
 import { PartsOrderPanel } from "@/components/parts-ordering/parts-order-panel";
+import { PartRequestDialog } from "@/components/parts-ordering/part-request-dialog";
 // [FEATURE: parts_ordering] END
 // [FEATURE: core_return_tracking] START
 import { ReturnForm } from "@/components/returns/return-form";
@@ -91,6 +93,17 @@ type ROMessage = {
     role: string;
     employeeId: string | null;
   };
+};
+
+type PartRequest = {
+  id: string;
+  partDescription: string;
+  partNumber: string | null;
+  quantity: number;
+  notes: string | null;
+  status: string;
+  createdAt: string;
+  requestedBy: { name: string | null };
 };
 
 type RODetailClientProps = {
@@ -428,6 +441,9 @@ export function RODetailClient({
   dmsExternalId: initialDmsExternalId,
 }: RODetailClientProps) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role ?? "advisor";
+  const isTech = userRole === "technician";
   const [status, setStatus] = useState(initialStatus);
   const [items, setItems] = useState<LineItem[]>(initialItems);
   const [totals, setTotals] = useState({
@@ -464,6 +480,34 @@ export function RODetailClient({
   }, [roId, status]);
   const lowStockIds = new Set(stockWarnings.filter((s) => s.isLow).map((s) => s.lineItemId));
   // [FEATURE: inventory_ro_integration] END
+
+  // Part requests state
+  const [partRequests, setPartRequests] = useState<PartRequest[]>([]);
+  const [showPartRequestDialog, setShowPartRequestDialog] = useState(false);
+  const [updatingRequestId, setUpdatingRequestId] = useState<string | null>(null);
+
+  const loadPartRequests = useCallback(() => {
+    fetch(`/api/ro/${roId}/part-requests`)
+      .then((r) => r.json())
+      .then((d) => setPartRequests(d.requests ?? []))
+      .catch(() => {});
+  }, [roId]);
+
+  useEffect(() => { loadPartRequests(); }, [loadPartRequests]);
+
+  async function updatePartRequestStatus(requestId: string, status: string) {
+    setUpdatingRequestId(requestId);
+    try {
+      await fetch(`/api/ro/${roId}/part-requests?requestId=${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      loadPartRequests();
+    } finally {
+      setUpdatingRequestId(null);
+    }
+  }
   // [FEATURE: tech_time_clock] START
   const [timeEntries, setTimeEntries] = useState<{ id: string; clockedInAt: string; clockedOutAt: string | null; flatRateHours: number | null; notes: string | null; tech: { name: string | null } | null }[]>([]);
   const [timeLoaded, setTimeLoaded] = useState(false);
@@ -1204,10 +1248,82 @@ export function RODetailClient({
         {/* [FEATURE: tech_time_clock] END */}
 
         {/* [FEATURE: parts_ordering] START */}
-        <TabsContent value="parts-orders" className="mt-4">
-          <div className="border border-border rounded-lg p-4">
-            <PartsOrderPanel roId={roId} />
+        <TabsContent value="parts-orders" className="mt-4 space-y-4">
+          {/* Part requests section */}
+          <div className="border border-border rounded-lg overflow-hidden">
+            <div className="px-4 py-2.5 bg-surface flex items-center justify-between gap-2 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-semibold text-foreground">Part Requests</span>
+                {partRequests.filter((r) => r.status === "pending").length > 0 && (
+                  <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded font-medium">
+                    {partRequests.filter((r) => r.status === "pending").length} pending
+                  </span>
+                )}
+              </div>
+              {isTech && (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowPartRequestDialog(true)}>
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Request Part
+                </Button>
+              )}
+            </div>
+            {partRequests.length === 0 ? (
+              <p className="px-4 py-6 text-sm text-muted-foreground text-center">
+                {isTech ? "No part requests yet. Use the button above to flag a part you need." : "No part requests from technicians."}
+              </p>
+            ) : (
+              <div className="divide-y divide-border">
+                {partRequests.map((req) => {
+                  const statusColors: Record<string, string> = {
+                    pending: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300",
+                    ordered: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300",
+                    received: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300",
+                    cancelled: "bg-surface text-muted-foreground",
+                  };
+                  return (
+                    <div key={req.id} className="px-4 py-3 flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium text-foreground">{req.partDescription}</span>
+                          {req.partNumber && <span className="text-xs font-mono text-muted-foreground">#{req.partNumber}</span>}
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium capitalize ${statusColors[req.status] ?? "bg-surface text-muted-foreground"}`}>{req.status}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Qty: {req.quantity} · By {req.requestedBy.name ?? "Unknown"}
+                          {req.notes && ` · ${req.notes}`}
+                        </div>
+                      </div>
+                      {!isTech && req.status !== "received" && req.status !== "cancelled" && (
+                        <Select
+                          value={req.status}
+                          onValueChange={(v) => v && updatePartRequestStatus(req.id, v)}
+                          disabled={updatingRequestId === req.id}
+                        >
+                          <SelectTrigger className="h-7 w-28 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="ordered">Ordered</SelectItem>
+                            <SelectItem value="received">Received</SelectItem>
+                            <SelectItem value="cancelled">Cancel</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
+
+          {/* Supplier orders section (hidden for techs) */}
+          {!isTech && (
+            <div className="border border-border rounded-lg p-4">
+              <PartsOrderPanel roId={roId} />
+            </div>
+          )}
         </TabsContent>
         {/* [FEATURE: parts_ordering] END */}
       </Tabs>
@@ -1218,6 +1334,14 @@ export function RODetailClient({
         onClose={() => setShowAddPart(false)}
         onAdd={handlePartAdded}
         roId={roId}
+      />
+
+      {/* Part Request Dialog (for techs) */}
+      <PartRequestDialog
+        open={showPartRequestDialog}
+        onOpenChange={setShowPartRequestDialog}
+        roId={roId}
+        onSubmitted={loadPartRequests}
       />
 
       {/* [FEATURE: customer_approval_portal] START */}

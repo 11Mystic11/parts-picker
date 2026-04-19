@@ -33,9 +33,12 @@ interface PartsSearchDialogProps {
 }
 
 const SUPPLIERS = [
-  { value: "mock", label: "Demo Supplier" },
-  { value: "NAPA", label: "NAPA Auto Parts" },
-  { value: "AUTOZONE", label: "AutoZone PRO" },
+  { value: "mock",      label: "Demo Supplier" },
+  { value: "NAPA",      label: "NAPA Auto Parts" },
+  { value: "AUTOZONE",  label: "AutoZone PRO" },
+  { value: "ORIELLY",   label: "O'Reilly Auto Parts" },
+  { value: "WORLDPAC",  label: "Worldpac" },
+  { value: "PARTSTECH", label: "PartsTech" },
 ];
 
 export function PartsSearchDialog({ open, onOpenChange, roId, onOrderSubmitted }: PartsSearchDialogProps) {
@@ -135,7 +138,7 @@ export function PartsSearchDialog({ open, onOpenChange, roId, onOrderSubmitted }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] sm:w-full">
         <DialogHeader>
           <DialogTitle>Order Parts</DialogTitle>
         </DialogHeader>
@@ -143,8 +146,8 @@ export function PartsSearchDialog({ open, onOpenChange, roId, onOrderSubmitted }
         {step === "search" ? (
           <div className="space-y-4">
             {/* Supplier selector */}
-            <div className="flex gap-3">
-              <div className="w-48">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="w-full sm:w-48 flex-shrink-0">
                 <Label className="text-xs text-muted-foreground mb-1 block">Supplier</Label>
                 <Select value={supplier} onValueChange={(v) => setSupplier(v ?? supplier)}>
                   <SelectTrigger>
@@ -157,9 +160,9 @@ export function PartsSearchDialog({ open, onOpenChange, roId, onOrderSubmitted }
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex-1">
-                <form onSubmit={handleSearch} className="flex gap-2 items-end">
-                  <div className="flex-1">
+              <div className="flex-1 min-w-0">
+                <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2 items-end">
+                  <div className="flex-1 min-w-0">
                     <Label className="text-xs text-muted-foreground mb-1 block">Search</Label>
                     <Input
                       placeholder="e.g. oil filter"
@@ -167,7 +170,7 @@ export function PartsSearchDialog({ open, onOpenChange, roId, onOrderSubmitted }
                       onChange={(e) => setQuery(e.target.value)}
                     />
                   </div>
-                  <div className="w-36">
+                  <div className="w-full sm:w-36">
                     <Label className="text-xs text-muted-foreground mb-1 block">Part #</Label>
                     <Input
                       placeholder="WIX-123"
@@ -175,7 +178,7 @@ export function PartsSearchDialog({ open, onOpenChange, roId, onOrderSubmitted }
                       onChange={(e) => setPartNumber(e.target.value)}
                     />
                   </div>
-                  <Button type="submit" disabled={searching || (!query && !partNumber)}>
+                  <Button type="submit" disabled={searching || (!query && !partNumber)} className="w-full sm:w-auto">
                     {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                   </Button>
                 </form>

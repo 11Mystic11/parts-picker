@@ -77,22 +77,49 @@ model Rooftop {
   dmsProvider    String?  // "cdk" | "reynolds" | null
   dmsConfig      String?  @db.Text // encrypted JSON: { clientId, clientSecret, dealerNumber, ... }
   // RO numbering config
-  roNumberPrefix  String?  // e.g. "RO-", "WO", "" (empty = numbers only)
+  roNumberPrefix     String?  // e.g. "RO-", "WO", "" (empty = numbers only)
+  roNumberAlphaGroup String?  @default("") // e.g. "A", "B", "" — inserted between prefix and digits
   roNumberNext    Int      @default(1)   // next sequence number to assign
   roNumberPadding Int      @default(5)   // zero-padding width e.g. 5 → "00042"
+  // SMS notifications
+  smsEnabled      Boolean  @default(false)
+  smsFromNumber   String?
+  // Service interval reminders
+  serviceRemindersEnabled Boolean @default(false)
+  reminderLeadDays        Int     @default(30)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  users           User[]
-  additionalUsers UserRooftop[]
-  repairOrders    RepairOrder[]
-  pricingMatrix   PricingMatrix[]
-  announcements   Announcement[]
-  partInventory   PartInventory[]
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users               User[]
+  additionalUsers     UserRooftop[]
+  repairOrders        RepairOrder[]
+  pricingMatrix       PricingMatrix[]
+  announcements       Announcement[]
+  partInventory       PartInventory[]
   // [FEATURE: core_return_tracking] START
-  partReturns     PartReturn[]
+  partReturns         PartReturn[]
   // [FEATURE: core_return_tracking] END
+  partRequests        PartRequest[]
+  // [FEATURE: notifications] START
+  notifications       Notification[]
+  // [FEATURE: notifications] END
+  // [FEATURE: special_orders] START
+  specialOrderParts   SpecialOrderPart[]
+  // [FEATURE: special_orders] END
+  // [FEATURE: purchase_orders] START
+  purchaseOrders      PurchaseOrder[]
+  // [FEATURE: purchase_orders] END
+  // [FEATURE: warranty_claims] START
+  warrantyClaims      WarrantyClaim[]
+  // [FEATURE: warranty_claims] END
+  // [FEATURE: loaner_vehicles] START
+  loanerVehicles      LoanerVehicle[]
+  // [FEATURE: loaner_vehicles] END
+  techCertifications  TechCertification[]
+  // [FEATURE: fleet_accounts] START
+  fleetAccounts       FleetAccount[]
+  // [FEATURE: fleet_accounts] END
 
   @@index([organizationId])
 }
@@ -135,12 +162,29 @@ model User {
   // [FEATURE: parts_ordering] START
   partsOrders         PartsOrder[]  @relation("UserPartsOrders")
   // [FEATURE: parts_ordering] END
+  partRequests            PartRequest[]      @relation("PartRequestsBy")
   // [FEATURE: core_return_tracking] START
-  partReturns         PartReturn[]  @relation("UserPartReturns")
+  partReturns             PartReturn[]       @relation("UserPartReturns")
   // [FEATURE: core_return_tracking] END
   // [FEATURE: canned_inspections] START
-  techInspections     RoInspection[] @relation("TechInspections")
+  techInspections         RoInspection[]     @relation("TechInspections")
   // [FEATURE: canned_inspections] END
+  // [FEATURE: notifications] START
+  notifications           Notification[]
+  // [FEATURE: notifications] END
+  // [FEATURE: special_orders] START
+  specialOrdersCreated    SpecialOrderPart[] @relation("SOPCreatedBy")
+  // [FEATURE: special_orders] END
+  // [FEATURE: purchase_orders] START
+  purchaseOrdersCreated   PurchaseOrder[]    @relation("POCreatedBy")
+  // [FEATURE: purchase_orders] END
+  // [FEATURE: warranty_claims] START
+  warrantyClaims          WarrantyClaim[]    @relation("WarrantyCreatedBy")
+  // [FEATURE: warranty_claims] END
+  // [FEATURE: loaner_vehicles] START
+  loanerLoans             LoanerLoan[]       @relation("LoanerLoanCreatedBy")
+  // [FEATURE: loaner_vehicles] END
+  techCertifications      TechCertification[]
 
   @@unique([rooftopId, employeeId])
 }
@@ -371,6 +415,14 @@ model RepairOrder {
   customerName      String?
   customerPhone     String?
   customerEmail     String?
+  // RO type: "customer" | "warranty" | "internal"
+  roType            String   @default("customer")
+  // Fleet account link
+  fleetAccountId    String?
+  fleetPoNumber     String?  // required PO number for fleet accounts that need it
+  // NHTSA recall cache
+  openRecallCount   Int?
+  recallCheckedAt   DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -400,8 +452,23 @@ model RepairOrder {
   // [FEATURE: canned_inspections] START
   inspections    RoInspection[]
   // [FEATURE: canned_inspections] END
+  partRequests   PartRequest[]
+  // [FEATURE: fleet_accounts] START
+  fleetAccount   FleetAccount? @relation(fields: [fleetAccountId], references: [id])
+  // [FEATURE: fleet_accounts] END
+  // [FEATURE: warranty_claims] START
+  warrantyClaims WarrantyClaim[]
+  // [FEATURE: warranty_claims] END
+  // [FEATURE: loaner_vehicles] START
+  loanerLoans    LoanerLoan[]
+  // [FEATURE: loaner_vehicles] END
+  // [FEATURE: special_orders] START
+  specialOrders  SpecialOrderPart[]
+  // [FEATURE: special_orders] END
 
   @@index([rooftopId, status])
+  @@index([rooftopId, roType])
+  @@index([fleetAccountId])
   @@index([advisorId])
   @@index([vin])
   @@index([scheduledAt])
@@ -583,8 +650,11 @@ model PartInventory {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  rooftop   Rooftop             @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
-  movements InventoryMovement[]
+  rooftop            Rooftop             @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  movements          InventoryMovement[]
+  // [FEATURE: purchase_orders] START
+  purchaseOrderLines PurchaseOrderLine[]
+  // [FEATURE: purchase_orders] END
 
   @@unique([rooftopId, partNumber])
   @@index([rooftopId])
@@ -636,6 +706,9 @@ model ROLineItemDecision {
   lineItemId    String   @unique
   decision      String   // "approved" | "declined"
   customerName  String?
+  // [FEATURE: lost_sales] START
+  declineReason String?  // "price" | "time_constraint" | "will_return" | "did_elsewhere" | "other"
+  // [FEATURE: lost_sales] END
   decidedAt     DateTime @default(now())
 
   repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
@@ -720,6 +793,10 @@ model PartsOrder {
   items           String    @db.Text // JSON: [{ partNumber, description, quantity, unitCost }]
   errorMessage    String?
   submittedAt     DateTime?
+  // [FEATURE: backorder_tracking] START
+  isBackordered   Boolean   @default(false)
+  backorderEta    DateTime?
+  // [FEATURE: backorder_tracking] END
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -832,4 +909,261 @@ model InspectionResult {
   templateItem InspectionTemplateItem @relation(fields: [templateItemId], references: [id])
 
   @@unique([inspectionId, templateItemId])
+}
+
+// ─── Part Requests (tech → advisor) ──────────────────────────────────────────
+// Techs can flag parts they need on an RO without placing a supplier order.
+// Advisors see and manage requests on the Parts Orders tab of the RO.
+
+model PartRequest {
+  id              String   @id @default(cuid())
+  repairOrderId   String
+  rooftopId       String
+  requestedById   String
+  partDescription String
+  partNumber      String?
+  quantity        Int      @default(1)
+  notes           String?  @db.Text
+  // "pending" | "ordered" | "received" | "cancelled"
+  status          String   @default("pending")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  rooftop     Rooftop     @relation(fields: [rooftopId], references: [id])
+  requestedBy User        @relation("PartRequestsBy", fields: [requestedById], references: [id])
+
+  @@index([repairOrderId])
+  @@index([rooftopId])
+}
+
+// ─── [FEATURE: notifications] ────────────────────────────────────────────────
+// In-app notification center — bell icon with unread count, role-targeted events.
+
+model Notification {
+  id        String    @id @default(cuid())
+  rooftopId String
+  userId    String
+  title     String
+  body      String
+  // type: "ro_approved"|"parts_arrived"|"dms_sync_failed"|"inspection_flagged"
+  //       |"recall_found"|"sop_arrived"|"backorder_cleared"
+  type      String
+  entityId  String?   // related RO/SOP/return id for navigation
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  rooftop Rooftop @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([rooftopId])
+}
+
+// ─── [FEATURE: special_orders] ───────────────────────────────────────────────
+// Special Order Parts (SOP) — customer-specific parts ordered with deposit tracking.
+// status: "ordered" | "received" | "customer_notified" | "picked_up" | "cancelled"
+
+model SpecialOrderPart {
+  id               String    @id @default(cuid())
+  rooftopId        String
+  repairOrderId    String?
+  partNumber       String
+  description      String
+  supplier         String
+  quantity         Float     @default(1)
+  customerName     String
+  customerPhone    String?
+  depositCollected Float     @default(0)
+  vendorPO         String?
+  supplierEta      DateTime?
+  status           String    @default("ordered")
+  notes            String?   @db.Text
+  createdById      String
+  arrivedAt        DateTime?
+  notifiedAt       DateTime?
+  pickedUpAt       DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  rooftop     Rooftop      @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  repairOrder RepairOrder? @relation(fields: [repairOrderId], references: [id], onDelete: SetNull)
+  createdBy   User         @relation("SOPCreatedBy", fields: [createdById], references: [id])
+
+  @@index([rooftopId, status])
+  @@index([repairOrderId])
+}
+
+// ─── [FEATURE: purchase_orders] ──────────────────────────────────────────────
+// Purchase Orders for inventory replenishment — create, submit, and receive POs.
+// status: "draft" | "submitted" | "partial_received" | "received" | "invoiced"
+
+model PurchaseOrder {
+  id          String             @id @default(cuid())
+  rooftopId   String
+  supplier    String
+  status      String             @default("draft")
+  notes       String?            @db.Text
+  submittedAt DateTime?
+  receivedAt  DateTime?
+  createdById String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  rooftop   Rooftop             @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  createdBy User                @relation("POCreatedBy", fields: [createdById], references: [id])
+  lines     PurchaseOrderLine[]
+
+  @@index([rooftopId, status])
+}
+
+model PurchaseOrderLine {
+  id              String         @id @default(cuid())
+  purchaseOrderId String
+  partNumber      String
+  description     String
+  qtyOrdered      Float
+  qtyReceived     Float          @default(0)
+  unitCost        Float
+  inventoryId     String?
+  createdAt       DateTime       @default(now())
+
+  purchaseOrder PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  inventory     PartInventory? @relation(fields: [inventoryId], references: [id], onDelete: SetNull)
+
+  @@index([purchaseOrderId])
+}
+
+// ─── [FEATURE: warranty_claims] ──────────────────────────────────────────────
+// Warranty Claims Tracker — OEM warranty work claim submission and tracking.
+// status: "draft" | "submitted" | "approved" | "paid" | "rejected"
+
+model WarrantyClaim {
+  id                    String    @id @default(cuid())
+  rooftopId             String
+  repairOrderId         String
+  claimNumber           String?
+  failureDescription    String    @db.Text
+  oemLaborCode          String?
+  partsUsed             String?   @db.Text // JSON: [{ partNumber, description, qty }]
+  expectedReimbursement Float     @default(0)
+  actualReimbursement   Float?
+  status                String    @default("draft")
+  rejectionReason       String?   @db.Text
+  submittedAt           DateTime?
+  approvedAt            DateTime?
+  paidAt                DateTime?
+  createdById           String
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  rooftop     Rooftop     @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  createdBy   User        @relation("WarrantyCreatedBy", fields: [createdById], references: [id])
+
+  @@index([rooftopId, status])
+  @@index([repairOrderId])
+}
+
+// ─── [FEATURE: loaner_vehicles] ──────────────────────────────────────────────
+// Loaner Vehicle Management — track customer loaners during service.
+// status: "available" | "loaned" | "in_service"
+
+model LoanerVehicle {
+  id           String       @id @default(cuid())
+  rooftopId    String
+  vin          String
+  make         String
+  model        String
+  year         Int
+  licensePlate String?
+  color        String?
+  status       String       @default("available")
+  notes        String?      @db.Text
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  rooftop Rooftop      @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  loans   LoanerLoan[]
+
+  @@index([rooftopId, status])
+}
+
+model LoanerLoan {
+  id                String    @id @default(cuid())
+  loanerVehicleId   String
+  repairOrderId     String
+  customerName      String
+  customerPhone     String?
+  checkOutAt        DateTime  @default(now())
+  expectedReturnAt  DateTime?
+  checkInAt         DateTime?
+  fuelLevelOut      Int       @default(100)
+  fuelLevelIn       Int?
+  mileageOut        Int
+  mileageIn         Int?
+  checkOutPhotoUrls String?   @db.Text // JSON array of Vercel Blob URLs
+  checkInPhotoUrls  String?   @db.Text
+  notes             String?   @db.Text
+  createdById       String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  loanerVehicle LoanerVehicle @relation(fields: [loanerVehicleId], references: [id], onDelete: Cascade)
+  repairOrder   RepairOrder   @relation(fields: [repairOrderId], references: [id])
+  createdBy     User          @relation("LoanerLoanCreatedBy", fields: [createdById], references: [id])
+
+  @@index([loanerVehicleId])
+  @@index([repairOrderId])
+}
+
+// ─── Technician Certification Tracker ────────────────────────────────────────
+// ASE and OEM certifications per tech with expiry alerts.
+// certType: "ASE_A1" | "ASE_A2" | ... | "ASE_L1" | "OEM_FORD" | "OEM_GM" | custom
+
+model TechCertification {
+  id         String    @id @default(cuid())
+  userId     String
+  rooftopId  String
+  certType   String
+  name       String
+  issuedAt   DateTime?
+  expiresAt  DateTime?
+  certNumber String?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rooftop Rooftop @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([rooftopId])
+  @@index([expiresAt])
+}
+
+// ─── [FEATURE: fleet_accounts] ───────────────────────────────────────────────
+// Fleet Account Management — centralized billing for fleet customers.
+// billingCycle: "weekly" | "monthly"
+
+model FleetAccount {
+  id              String      @id @default(cuid())
+  rooftopId       String
+  companyName     String
+  contactName     String?
+  contactPhone    String?
+  contactEmail    String?
+  billingCycle    String      @default("monthly")
+  requiresPo      Boolean     @default(false)
+  pricingOverride String?     @db.Text // JSON — same tier structure as PricingMatrix.tiers
+  notes           String?     @db.Text
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  rooftop      Rooftop       @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  repairOrders RepairOrder[]
+
+  @@index([rooftopId, isActive])
 }

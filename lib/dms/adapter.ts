@@ -125,6 +125,22 @@ export async function getDMSAdapter(rooftop: Pick<Rooftop, "dmsProvider" | "dmsC
       const { getReynoldsAdapter } = await import("./reynolds");
       return getReynoldsAdapter(config as Record<string, string>);
     }
+    case "dealertrack": {
+      const { getDealerTrackAdapter } = await import("./dealertrack");
+      return getDealerTrackAdapter(config as Record<string, string>);
+    }
+    case "dealersocket": {
+      const { getDealerSocketAdapter } = await import("./dealersocket");
+      return getDealerSocketAdapter(config as Record<string, string>);
+    }
+    case "pbs": {
+      const { getPBSAdapter } = await import("./pbs");
+      return getPBSAdapter(config as Record<string, string>);
+    }
+    case "mitchell1": {
+      const { getMitchell1Adapter } = await import("./mitchell1");
+      return getMitchell1Adapter(config as Record<string, string>);
+    }
     default:
       console.warn(`[DMS] Unknown provider: ${rooftop.dmsProvider}`);
       return null;

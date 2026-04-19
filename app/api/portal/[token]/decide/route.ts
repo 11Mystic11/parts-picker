@@ -16,6 +16,8 @@ const decideSchema = z.object({
       z.object({
         lineItemId: z.string(),
         decision: z.enum(["approved", "declined"]),
+        // [FEATURE: lost_sales] — optional reason for declined items
+        declineReason: z.enum(["price", "time_constraint", "will_return", "did_elsewhere", "other"]).optional(),
       })
     )
     .min(1),
@@ -60,12 +62,19 @@ export async function POST(req: NextRequest, { params }: Params) {
       .map((d) =>
         db.rOLineItemDecision.upsert({
           where: { lineItemId: d.lineItemId },
-          update: { decision: d.decision, customerName: customerName ?? null, decidedAt: new Date() },
+          update: {
+            decision: d.decision,
+            customerName: customerName ?? null,
+            decidedAt: new Date(),
+            // [FEATURE: lost_sales] — capture decline reason
+            declineReason: d.decision === "declined" ? (d.declineReason ?? "other") : null,
+          },
           create: {
             repairOrderId: roId,
             lineItemId: d.lineItemId,
             decision: d.decision,
             customerName: customerName ?? null,
+            declineReason: d.decision === "declined" ? (d.declineReason ?? "other") : null,
           },
         })
       )

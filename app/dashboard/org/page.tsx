@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Building2, Users, ClipboardList, DollarSign, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { AddRooftopDialog } from "./add-rooftop-dialog";
 
 export default async function OrgOverviewPage() {
   const session = await getServerSession(authOptions);
@@ -102,7 +103,10 @@ export default async function OrgOverviewPage() {
 
       {/* Per-rooftop table */}
       <div>
-        <h2 className="text-lg font-semibold text-foreground mb-3">Rooftops</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-foreground">Rooftops</h2>
+          {(user.role === "admin" || user.role === "manager") && <AddRooftopDialog />}
+        </div>
         <div className="rounded-lg border border-border overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-surface text-muted-foreground text-xs uppercase tracking-wide border-b border-border">

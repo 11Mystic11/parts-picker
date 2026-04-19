@@ -207,8 +207,8 @@ export default async function TechDashboardPage() {
             <Package className="h-4 w-4 text-amber-600" />
             Parts Needed
           </h2>
-          <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-lg border border-border overflow-hidden overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm">
               <thead className="bg-surface border-b border-border">
                 <tr>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Part</th>
