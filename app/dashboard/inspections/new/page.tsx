@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ClipboardList, Loader2, Car } from "lucide-react";
@@ -29,7 +29,7 @@ interface LotVehicle {
   stockNumber: string | null;
 }
 
-export default function NewInspectionPage() {
+function NewInspectionInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefilledLotVehicleId = searchParams.get("lotVehicleId") ?? "";
@@ -261,5 +261,13 @@ export default function NewInspectionPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewInspectionPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-muted-foreground text-sm">Loading…</div>}>
+      <NewInspectionInner />
+    </Suspense>
   );
 }
