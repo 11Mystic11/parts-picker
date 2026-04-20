@@ -31,6 +31,8 @@ type CalendarEvent = {
   advisorName: string | null;
   color: string;
   customerName: string | null;
+  vehicleType: string;
+  lotVehicleId: string | null;
 };
 
 type ApiEvent = Omit<CalendarEvent, "start" | "end"> & {
@@ -232,6 +234,12 @@ export function CalendarClient({ timezone }: { timezone: string }) {
                   {format(selected.end, "MMM d, h:mm a")}
                 </span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Type</span>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded ${selected.vehicleType === "lot" ? "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300" : "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"}`}>
+                  {selected.vehicleType === "lot" ? "Lot Vehicle" : "Customer"}
+                </span>
+              </div>
               {selected.customerName && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Customer</span>
@@ -240,13 +248,21 @@ export function CalendarClient({ timezone }: { timezone: string }) {
               )}
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 space-y-2">
               <a
                 href={`/dashboard/ro/${selected.roId}`}
                 className="flex items-center justify-center w-full h-8 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:brightness-105 transition-all"
               >
                 Open RO
               </a>
+              {selected.vehicleType === "lot" && selected.lotVehicleId && (
+                <a
+                  href={`/dashboard/lot-vehicles/${selected.lotVehicleId}`}
+                  className="flex items-center justify-center w-full h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-sm font-medium hover:brightness-105 transition-all"
+                >
+                  View Lot Vehicle
+                </a>
+              )}
             </div>
           </div>
         </div>

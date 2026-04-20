@@ -120,6 +120,9 @@ model Rooftop {
   // [FEATURE: fleet_accounts] START
   fleetAccounts       FleetAccount[]
   // [FEATURE: fleet_accounts] END
+  lotVehicles         LotVehicle[]
+  customers           Customer[]
+  partTags            PartTag[]
 
   @@index([organizationId])
 }
@@ -417,6 +420,12 @@ model RepairOrder {
   customerEmail     String?
   // RO type: "customer" | "warranty" | "internal"
   roType            String   @default("customer")
+  // vehicleType: "customer" | "lot"
+  vehicleType       String   @default("customer")
+  // Lot vehicle link (when vehicleType = "lot")
+  lotVehicleId      String?
+  // Customer profile link
+  customerId        String?
   // Fleet account link
   fleetAccountId    String?
   fleetPoNumber     String?  // required PO number for fleet accounts that need it
@@ -453,6 +462,8 @@ model RepairOrder {
   inspections    RoInspection[]
   // [FEATURE: canned_inspections] END
   partRequests   PartRequest[]
+  lotVehicle     LotVehicle?   @relation(fields: [lotVehicleId], references: [id], onDelete: SetNull)
+  customer       Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
   // [FEATURE: fleet_accounts] START
   fleetAccount   FleetAccount? @relation(fields: [fleetAccountId], references: [id])
   // [FEATURE: fleet_accounts] END
@@ -473,6 +484,8 @@ model RepairOrder {
   @@index([vin])
   @@index([scheduledAt])
   @@index([assignedTechId])
+  @@index([lotVehicleId])
+  @@index([customerId])
 }
 
 model ROLineItem {
@@ -492,6 +505,7 @@ model ROLineItem {
   unitPrice      Float    @default(0) // after markup / labor rate applied
   totalPrice     Float    @default(0)
   isAccepted     Boolean  @default(true) // advisor accepted this item
+  tags           String   @default("[]") // JSON array of PartTag IDs
   sortOrder      Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -881,20 +895,26 @@ model InspectionTemplateItem {
 
 model RoInspection {
   id            String   @id @default(cuid())
-  repairOrderId String
+  // Nullable — standalone inspections have no RO (repairOrderId = null)
+  repairOrderId String?
   templateId    String
   techId        String
   status        String   @default("in_progress") // "in_progress" | "complete"
+  // Standalone inspection context (used when repairOrderId = null)
+  vin           String?
+  vehicleLabel  String?  // e.g. "2018 Ford F-150 XLT"
+  lotVehicleId  String?  // link to a lot vehicle instead of RO
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  repairOrder RepairOrder        @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  repairOrder RepairOrder?       @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
   template    InspectionTemplate @relation(fields: [templateId], references: [id])
   tech        User               @relation("TechInspections", fields: [techId], references: [id])
+  lotVehicle  LotVehicle?        @relation(fields: [lotVehicleId], references: [id], onDelete: SetNull)
   results     InspectionResult[]
 
-  @@unique([repairOrderId, templateId])
   @@index([repairOrderId])
+  @@index([lotVehicleId])
 }
 
 model InspectionResult {
@@ -1166,4 +1186,70 @@ model FleetAccount {
   repairOrders RepairOrder[]
 
   @@index([rooftopId, isActive])
+}
+
+// ─── Lot Vehicles ─────────────────────────────────────────────────────────────
+// Dealer lot vehicles — inventory/fleet cars that can be serviced without a customer RO.
+// status: "available" | "in_service" | "sold"
+
+model LotVehicle {
+  id           String   @id @default(cuid())
+  rooftopId    String
+  vin          String?
+  year         Int?
+  make         String
+  model        String
+  trim         String?
+  color        String?
+  licensePlate String?
+  stockNumber  String?
+  mileage      Int?
+  status       String   @default("available")
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  rooftop      Rooftop        @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  repairOrders RepairOrder[]
+  inspections  RoInspection[]
+
+  @@index([rooftopId, status])
+}
+
+// ─── Customers ────────────────────────────────────────────────────────────────
+// Persistent customer profiles. Denormalized customer fields on RepairOrder are
+// kept for backward compatibility; this model enables a proper customer module.
+
+model Customer {
+  id        String   @id @default(cuid())
+  rooftopId String
+  name      String
+  phone     String?
+  email     String?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rooftop      Rooftop       @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  repairOrders RepairOrder[]
+
+  @@index([rooftopId])
+  @@index([phone])
+}
+
+// ─── Part Tags ────────────────────────────────────────────────────────────────
+// User-defined tags for RO line items (e.g. "NAPA", "Backordered", "Special Order").
+// ROLineItem.tags stores a JSON array of PartTag IDs.
+
+model PartTag {
+  id        String   @id @default(cuid())
+  rooftopId String
+  name      String
+  color     String   @default("#6b7280")
+  createdAt DateTime @default(now())
+
+  rooftop Rooftop @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+
+  @@unique([rooftopId, name])
+  @@index([rooftopId])
 }

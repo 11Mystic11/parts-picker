@@ -76,6 +76,8 @@ export async function GET(req: NextRequest) {
       advisorName: ro.advisor.name,
       color: getColor(ro.assignedTechId),
       customerName: ro.customerName,
+      vehicleType: ro.vehicleType ?? "customer",
+      lotVehicleId: ro.lotVehicleId ?? null,
     };
   });
 

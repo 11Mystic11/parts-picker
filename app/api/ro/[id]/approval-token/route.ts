@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   // Feature flag guard
   const enabled = await flagEnabled("customer_approval_portal" as any, user.rooftopId);
   if (!enabled) {
-    return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+    return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
   }
 
   const ro = await db.repairOrder.findUnique({

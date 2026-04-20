@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const user = session.user as { id: string; rooftopId?: string };
 
   const enabled = await flagEnabled("parts_ordering" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const supplier = searchParams.get("supplier") ?? "mock";

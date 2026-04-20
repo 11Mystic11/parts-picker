@@ -28,7 +28,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
 
   const enabled = await flagEnabled("core_return_tracking" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   const partReturn = await db.partReturn.findUnique({
     where: { id },
@@ -53,7 +53,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params;
 
   const enabled = await flagEnabled("core_return_tracking" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   const existing = await db.partReturn.findUnique({ where: { id }, select: { rooftopId: true, status: true } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -94,7 +94,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   const { id } = await params;
 
   const enabled = await flagEnabled("core_return_tracking" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   const existing = await db.partReturn.findUnique({ where: { id }, select: { rooftopId: true, status: true } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });

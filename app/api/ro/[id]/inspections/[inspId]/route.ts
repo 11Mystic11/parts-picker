@@ -6,7 +6,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma as db } from "@/lib/db";
-import { flagEnabled } from "@/lib/flags/evaluate";
 import { z } from "zod";
 
 type Params = { params: Promise<{ id: string; inspId: string }> };
@@ -30,9 +29,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const user = session.user as { id: string; rooftopId?: string };
   const { id, inspId } = await params;
-
-  const enabled = await flagEnabled("canned_inspections" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
 
   const ro = await db.repairOrder.findUnique({ where: { id }, select: { rooftopId: true } });
   if (!ro) return NextResponse.json({ error: "Not found" }, { status: 404 });

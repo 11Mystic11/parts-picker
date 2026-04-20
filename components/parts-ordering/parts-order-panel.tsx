@@ -151,9 +151,9 @@ export function PartsOrderPanel({ roId }: PartsOrderPanelProps) {
 
                 <div className="text-xs text-muted-foreground divide-y border rounded">
                   {items.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between px-2 py-1">
-                      <span>{item.description} <span className="opacity-60">({item.partNumber})</span></span>
-                      <span>x{item.quantity} @ ${item.unitCost.toFixed(2)}</span>
+                    <div key={idx} className="flex items-center gap-2 px-2 py-1 min-w-0">
+                      <span className="flex-1 min-w-0 truncate">{item.description} <span className="opacity-60">({item.partNumber})</span></span>
+                      <span className="shrink-0">x{item.quantity} @ ${item.unitCost.toFixed(2)}</span>
                     </div>
                   ))}
                 </div>

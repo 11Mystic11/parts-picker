@@ -21,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
 
   const enabled = await flagEnabled("dvi" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   const ro = await db.repairOrder.findUnique({
     where: { id },
@@ -61,7 +61,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const { id } = await params;
 
   const enabled = await flagEnabled("dvi" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   const ro = await db.repairOrder.findUnique({ where: { id }, select: { rooftopId: true } });
   if (!ro) return NextResponse.json({ error: "Not found" }, { status: 404 });

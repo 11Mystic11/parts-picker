@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   }
 
   const enabled = await flagEnabled("tech_time_clock" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const fromParam = searchParams.get("from");

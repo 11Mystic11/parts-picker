@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   const user = session.user as { id: string; rooftopId?: string };
 
   const enabled = await flagEnabled("core_return_tracking" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   const user = session.user as { id: string; role?: string; rooftopId?: string };
 
   const enabled = await flagEnabled("core_return_tracking" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   let body: unknown;
   try { body = await req.json(); } catch {

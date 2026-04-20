@@ -32,9 +32,6 @@ export async function GET(_req: NextRequest) {
 
   const user = session.user as { id: string; rooftopId?: string };
 
-  const enabled = await flagEnabled("canned_inspections" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
-
   const templates = await db.inspectionTemplate.findMany({
     where: {
       isActive: true,
@@ -58,7 +55,7 @@ export async function POST(req: NextRequest) {
   }
 
   const enabled = await flagEnabled("canned_inspections" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   let body: unknown;
   try { body = await req.json(); } catch {

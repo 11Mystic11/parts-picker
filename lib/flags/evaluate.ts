@@ -74,21 +74,18 @@ export async function setFlag(
   enabled: boolean,
   rooftopId?: string | null
 ): Promise<void> {
-  await db.featureFlag.upsert({
-    where: {
-      flagKey_rooftopId: {
-        flagKey: key,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        rooftopId: (rooftopId ?? null) as any,
-      },
-    },
-    update: { enabled },
-    create: {
-      flagKey: key,
-      rooftopId: rooftopId ?? null,
-      enabled,
-    },
+  // Prisma upsert cannot resolve null in compound unique constraints, so we
+  // use findFirst + update/create to handle global (rooftopId = null) flags.
+  const existing = await db.featureFlag.findFirst({
+    where: { flagKey: key, rooftopId: rooftopId ?? null },
   });
+  if (existing) {
+    await db.featureFlag.update({ where: { id: existing.id }, data: { enabled } });
+  } else {
+    await db.featureFlag.create({
+      data: { flagKey: key, rooftopId: rooftopId ?? null, enabled },
+    });
+  }
 }
 
 /**

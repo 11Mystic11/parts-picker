@@ -47,6 +47,8 @@ import {
   // [FEATURE: canned_inspections] START
   ClipboardCheck,
   // [FEATURE: canned_inspections] END
+  Tag,
+  Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GlobalChatPanel } from "@/components/global-chat-panel";
@@ -87,6 +89,8 @@ const navGroups: NavGroup[] = [
       { label: "New RO",         href: "/dashboard/ro/new",         icon: Car },
       { label: "Repair Orders",  href: "/dashboard/ro",             icon: ClipboardList },
       { label: "Customers",      href: "/dashboard/customers",      icon: UserSearch },
+      { label: "Lot Vehicles",   href: "/dashboard/lot-vehicles",   icon: Truck },
+      { label: "Inspections",    href: "/dashboard/inspections",    icon: ClipboardCheck },
       { label: "Calendar",       href: "/dashboard/calendar",       icon: CalendarDays },
       { label: "Document Ingest",href: "/dashboard/ingest",         icon: Upload },
       { label: "Inventory",      href: "/dashboard/inventory",      icon: Package },
@@ -145,6 +149,7 @@ const navGroups: NavGroup[] = [
       // [FEATURE: fleet_accounts] START
       { label: "Fleet Accounts", href: "/dashboard/admin/fleet-accounts", icon: Building2, roles: ["admin", "manager"] },
       // [FEATURE: fleet_accounts] END
+      { label: "Part Tags",      href: "/dashboard/admin/part-tags", icon: Tag,         roles: ["admin", "manager"] },
       { label: "Users",          href: "/dashboard/admin/users",     icon: Users,       roles: ["admin"] },
     ],
   },

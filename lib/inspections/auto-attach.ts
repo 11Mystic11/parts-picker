@@ -29,8 +29,8 @@ export async function autoAttachInspections(
     if (diff > window) continue;
 
     // Check not already attached
-    const existing = await db.roInspection.findUnique({
-      where: { repairOrderId_templateId: { repairOrderId: roId, templateId: template.id } },
+    const existing = await db.roInspection.findFirst({
+      where: { repairOrderId: roId, templateId: template.id },
     });
     if (existing) continue;
 

@@ -64,8 +64,12 @@ import { PartRequestDialog } from "@/components/parts-ordering/part-request-dial
 // [FEATURE: core_return_tracking] START
 import { ReturnForm } from "@/components/returns/return-form";
 // [FEATURE: core_return_tracking] END
+import { LineItemTags } from "@/components/parts/line-item-tags";
+import { InspectionSummary } from "@/components/inspections/inspection-summary";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
+
+type PartTag = { id: string; name: string; color: string };
 
 type LineItem = {
   id: string;
@@ -80,6 +84,7 @@ type LineItem = {
   laborOpCode: string | null;
   supplier: string | null;
   isAccepted: boolean;
+  tags: string[]; // array of PartTag IDs
 };
 
 type ROMessage = {
@@ -116,6 +121,7 @@ type RODetailClientProps = {
   taxAmount: number;
   totalAmount: number;
   notes: string | null;
+  customerId?: string | null;
   dmsSyncStatus?: string | null;
   dmsSyncedAt?: string | null;
   dmsExternalId?: string | null;
@@ -145,6 +151,16 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 const SUPPLIERS = ["NAPA", "AutoZone", "O'Reilly", "Advance", "Rock Auto", "OEM", "Other"];
+
+// Note category definitions for the categorized notes tab
+const NOTE_CATEGORIES = [
+  { key: "all",      label: "All" },
+  { key: "customer", label: "Customer" },
+  { key: "tech",     label: "Tech" },
+  { key: "shop",     label: "Shop" },
+  { key: "concern",  label: "Concern" },
+] as const;
+type NoteCategory = "all" | "customer" | "tech" | "shop" | "concern";
 
 // ─── Messages Tab ──────────────────────────────────────────────────────────────
 
@@ -257,6 +273,158 @@ function MessagesTab({ roId, category }: { roId: string; category: "message" | "
             value={content}
             onChange={(e) => setContent(e.target.value)}
             className="flex-1 min-h-[72px] resize-none text-sm"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSend();
+            }}
+          />
+          <Button
+            onClick={handleSend}
+            disabled={sending || !content.trim()}
+            className="self-end"
+            size="sm"
+          >
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">Ctrl+Enter to send</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Categorized Notes Tab ─────────────────────────────────────────────────────
+
+function CategorizedNotesTab({ roId }: { roId: string }) {
+  const [activeCategory, setActiveCategory] = useState<NoteCategory>("all");
+  const [messages, setMessages] = useState<ROMessage[]>([]);
+  const [content, setContent] = useState("");
+  const [sending, setSending] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const NOTE_CATEGORIES_KEYS = new Set(["customer", "tech", "shop", "concern", "note"]);
+
+  async function fetchMessages() {
+    try {
+      const res = await fetch(`/api/ro/${roId}/messages`);
+      if (res.ok) {
+        const all: ROMessage[] = await res.json();
+        setMessages(all.filter((m) => NOTE_CATEGORIES_KEYS.has(m.category)));
+      }
+    } catch {
+      // silent
+    }
+  }
+
+  useEffect(() => {
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 30000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roId]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, activeCategory]);
+
+  const filtered = activeCategory === "all"
+    ? messages
+    : messages.filter((m) => m.category === activeCategory || (activeCategory === "shop" && m.category === "note"));
+
+  async function handleSend() {
+    if (!content.trim()) return;
+    const postCategory = activeCategory === "all" ? "shop" : activeCategory;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/ro/${roId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: content.trim(), category: postCategory }),
+      });
+      if (res.ok) {
+        setContent("");
+        await fetchMessages();
+      }
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const CATEGORY_COLORS: Record<string, string> = {
+    customer: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300",
+    tech:     "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300",
+    shop:     "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300",
+    note:     "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300",
+    concern:  "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300",
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Sub-tabs */}
+      <div className="flex gap-1 flex-wrap">
+        {NOTE_CATEGORIES.map((cat) => (
+          <button
+            key={cat.key}
+            onClick={() => setActiveCategory(cat.key)}
+            className={[
+              "px-3 py-1 text-xs font-medium rounded-full transition-colors",
+              activeCategory === cat.key
+                ? "bg-primary text-primary-foreground"
+                : "bg-surface text-muted-foreground hover:text-foreground border border-border",
+            ].join(" ")}
+          >
+            {cat.label}
+            {cat.key !== "all" && (
+              <span className="ml-1 opacity-60">
+                ({messages.filter((m) =>
+                  m.category === cat.key || (cat.key === "shop" && m.category === "note")
+                ).length})
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Message list */}
+      <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+        {filtered.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            No {activeCategory === "all" ? "" : activeCategory + " "}notes yet.
+          </p>
+        ) : (
+          filtered.map((msg) => (
+            <div key={msg.id} className="flex gap-3">
+              <div className="flex-1 bg-surface rounded-lg px-3 py-2.5 border border-border">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="font-semibold text-foreground text-sm">
+                    {msg.author.name ?? msg.author.employeeId ?? "Unknown"}
+                  </span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${ROLE_COLORS[msg.author.role] ?? "bg-surface text-muted-foreground"}`}>
+                    {msg.author.role}
+                  </span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded font-medium capitalize ${CATEGORY_COLORS[msg.category] ?? "bg-surface text-muted-foreground"}`}>
+                    {msg.category === "note" ? "shop" : msg.category}
+                  </span>
+                  <span className="ml-auto text-xs text-muted-foreground">{timeAgo(msg.createdAt)}</span>
+                </div>
+                <p className="text-sm text-foreground whitespace-pre-wrap">{msg.content}</p>
+              </div>
+            </div>
+          ))
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Compose */}
+      <div className="border-t border-border pt-3 space-y-2">
+        {activeCategory === "all" && (
+          <p className="text-xs text-muted-foreground">Posting to: <span className="font-medium text-foreground">Shop</span> (select a category tab to change)</p>
+        )}
+        <div className="flex gap-2">
+          <Textarea
+            placeholder={`Add a ${activeCategory === "all" ? "shop" : activeCategory} note…`}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="flex-1 min-h-[68px] resize-none text-sm"
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSend();
             }}
@@ -436,6 +604,7 @@ export function RODetailClient({
   shopSupplyFee: initialShopFee,
   taxAmount: initialTax,
   totalAmount: initialTotal,
+  customerId,
   dmsSyncStatus: initialDmsSyncStatus,
   dmsSyncedAt: initialDmsSyncedAt,
   dmsExternalId: initialDmsExternalId,
@@ -481,6 +650,43 @@ export function RODetailClient({
   const lowStockIds = new Set(stockWarnings.filter((s) => s.isLow).map((s) => s.lineItemId));
   // [FEATURE: inventory_ro_integration] END
 
+  // Part tags — load rooftop tag library once
+  const [allTags, setAllTags] = useState<PartTag[]>([]);
+  useEffect(() => {
+    fetch("/api/part-tags")
+      .then((r) => r.json())
+      .then((d) => setAllTags(d.tags ?? []))
+      .catch(() => {});
+  }, []);
+
+  // Customer notes — load from linked Customer profile if present
+  const [customerNotes, setCustomerNotes] = useState<string>("");
+  const [customerNotesSaving, setCustomerNotesSaving] = useState(false);
+  const [customerNotesOriginal, setCustomerNotesOriginal] = useState<string>("");
+  useEffect(() => {
+    if (!customerId) return;
+    fetch(`/api/customers/${customerId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const n = d.customer?.notes ?? "";
+        setCustomerNotes(n);
+        setCustomerNotesOriginal(n);
+      })
+      .catch(() => {});
+  }, [customerId]);
+
+  async function saveCustomerNotes() {
+    if (!customerId) return;
+    setCustomerNotesSaving(true);
+    await fetch(`/api/customers/${customerId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: customerNotes || null }),
+    });
+    setCustomerNotesOriginal(customerNotes);
+    setCustomerNotesSaving(false);
+  }
+
   // Part requests state
   const [partRequests, setPartRequests] = useState<PartRequest[]>([]);
   const [showPartRequestDialog, setShowPartRequestDialog] = useState(false);
@@ -517,6 +723,54 @@ export function RODetailClient({
     setTimeLoaded(true);
   }
   // [FEATURE: tech_time_clock] END
+
+  // Inspections tab state
+  type ROInspectionItem = {
+    id: string;
+    status: string;
+    template: { name: string; items: { id: string; label: string; checkType: string; unit: string | null }[] };
+    results: { templateItemId: string; value: string | null; notes: string | null }[];
+  };
+  const [inspections, setInspections] = useState<ROInspectionItem[]>([]);
+  const [inspectionsLoaded, setInspectionsLoaded] = useState(false);
+  const [attachingTemplate, setAttachingTemplate] = useState(false);
+  const [inspTemplates, setInspTemplates] = useState<{ id: string; name: string }[]>([]);
+  const [inspTemplateId, setInspTemplateId] = useState("");
+  const [inspTemplatesLoaded, setInspTemplatesLoaded] = useState(false);
+
+  async function loadInspections() {
+    const res = await fetch(`/api/ro/${roId}/inspections`);
+    if (res.ok) {
+      const d = await res.json();
+      setInspections(d.inspections ?? []);
+    }
+    setInspectionsLoaded(true);
+  }
+
+  async function loadInspTemplates() {
+    if (inspTemplatesLoaded) return;
+    const res = await fetch("/api/inspection-templates");
+    if (res.ok) {
+      const d = await res.json();
+      setInspTemplates(d.templates ?? []);
+    }
+    setInspTemplatesLoaded(true);
+  }
+
+  async function attachInspection() {
+    if (!inspTemplateId) return;
+    setAttachingTemplate(true);
+    const res = await fetch(`/api/ro/${roId}/inspections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ templateId: inspTemplateId }),
+    });
+    if (res.ok) {
+      setInspTemplateId("");
+      await loadInspections();
+    }
+    setAttachingTemplate(false);
+  }
 
   const [showAddPart, setShowAddPart] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -735,6 +989,16 @@ export function RODetailClient({
             Time
           </TabsTrigger>
           {/* [FEATURE: tech_time_clock] END */}
+          {/* [FEATURE: canned_inspections] START */}
+          <TabsTrigger
+            value="inspections"
+            className="flex items-center gap-1.5"
+            onClick={() => { if (!inspectionsLoaded) loadInspections(); loadInspTemplates(); }}
+          >
+            <ClipboardList className="h-4 w-4" />
+            Inspections
+          </TabsTrigger>
+          {/* [FEATURE: canned_inspections] END */}
           {/* [FEATURE: parts_ordering] START */}
           <TabsTrigger value="parts-orders" className="flex items-center gap-1.5">
             <Package className="h-4 w-4" />
@@ -782,6 +1046,16 @@ export function RODetailClient({
                         <span className="text-xs font-mono text-muted-foreground">#{item.partNumber}</span>
                       )}
                     </div>
+                    <LineItemTags
+                      roId={roId}
+                      itemId={item.id}
+                      initialTagIds={item.tags}
+                      allTags={allTags}
+                      onTagsChange={(ids, newTag) => {
+                        setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, tags: ids } : i));
+                        if (newTag) setAllTags((prev) => prev.find((t) => t.id === newTag.id) ? prev : [...prev, newTag]);
+                      }}
+                    />
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">
                         Qty {item.quantity} · Unit {fmt(item.unitPrice)}
@@ -840,6 +1114,19 @@ export function RODetailClient({
                               </Badge>
                             )}
                             {/* [FEATURE: inventory_ro_integration] END */}
+                          </div>
+                          {/* Part tags */}
+                          <div className="mt-1">
+                            <LineItemTags
+                              roId={roId}
+                              itemId={item.id}
+                              initialTagIds={item.tags}
+                              allTags={allTags}
+                              onTagsChange={(ids, newTag) => {
+                        setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, tags: ids } : i));
+                        if (newTag) setAllTags((prev) => prev.find((t) => t.id === newTag.id) ? prev : [...prev, newTag]);
+                      }}
+                            />
                           </div>
                           {item.partNumber && (
                             <div className="text-xs text-muted-foreground font-mono">
@@ -1184,12 +1471,33 @@ export function RODetailClient({
         </TabsContent>
 
         {/* ── Notes Tab ───────────────────────────────────────────────────── */}
-        <TabsContent value="notes" className="mt-4">
+        <TabsContent value="notes" className="mt-4 space-y-4">
+          {/* Customer Profile Notes — only shown when RO is linked to a Customer */}
+          {customerId && (
+            <div className="border border-border rounded-lg p-4 space-y-2">
+              <p className="text-sm font-semibold text-foreground">Customer Notes</p>
+              <p className="text-xs text-muted-foreground">Notes saved to the customer profile (visible on customer page).</p>
+              <Textarea
+                value={customerNotes}
+                onChange={(e) => setCustomerNotes(e.target.value)}
+                placeholder="Notes about this customer…"
+                rows={3}
+              />
+              {customerNotes !== customerNotesOriginal && (
+                <Button size="sm" onClick={saveCustomerNotes} disabled={customerNotesSaving}>
+                  {customerNotesSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Check className="h-4 w-4 mr-1.5" />}
+                  Save Customer Notes
+                </Button>
+              )}
+            </div>
+          )}
+          {/* RO-scoped dealer notes */}
           <div className="border border-border rounded-lg p-4">
+            <p className="text-sm font-semibold text-foreground mb-1">RO Notes</p>
             <p className="text-xs text-muted-foreground mb-3">
-              Dealer-wide notes for this RO — visible to all departments (service, parts, management).
+              Categorized notes for this RO — Customer, Tech, Shop, or Concern.
             </p>
-            <MessagesTab roId={roId} category="note" />
+            <CategorizedNotesTab roId={roId} />
           </div>
         </TabsContent>
 
@@ -1246,6 +1554,56 @@ export function RODetailClient({
           </div>
         </TabsContent>
         {/* [FEATURE: tech_time_clock] END */}
+
+        {/* [FEATURE: canned_inspections] START */}
+        <TabsContent value="inspections" className="mt-4 space-y-4">
+          {/* Attach a template */}
+          <div className="border border-border rounded-lg p-4 space-y-3">
+            <p className="text-sm font-medium text-foreground">Add Inspection</p>
+            {!inspTemplatesLoaded ? (
+              <p className="text-xs text-muted-foreground">Loading templates…</p>
+            ) : inspTemplates.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No templates. Create one in{" "}
+                <a href="/dashboard/admin/inspection-templates" className="text-primary hover:underline">
+                  Admin → Inspection Templates
+                </a>.
+              </p>
+            ) : (
+              <div className="flex gap-2">
+                <Select value={inspTemplateId} onValueChange={(v) => setInspTemplateId(v ?? "")}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Choose template…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {inspTemplates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  onClick={attachInspection}
+                  disabled={!inspTemplateId || attachingTemplate}
+                >
+                  {attachingTemplate ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Inspection list */}
+          {!inspectionsLoaded ? (
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : inspections.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No inspections on this RO yet.</p>
+          ) : (
+            <InspectionSummary inspections={inspections} />
+          )}
+        </TabsContent>
+        {/* [FEATURE: canned_inspections] END */}
 
         {/* [FEATURE: parts_ordering] START */}
         <TabsContent value="parts-orders" className="mt-4 space-y-4">

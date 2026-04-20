@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma as db } from "@/lib/db";
-import { flagEnabled } from "@/lib/flags/evaluate";
 import { z } from "zod";
 
 type Params = { params: Promise<{ id: string }> };
@@ -18,9 +17,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const user = session.user as { id: string; rooftopId?: string };
   const { id } = await params;
-
-  const enabled = await flagEnabled("canned_inspections" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
 
   const ro = await db.repairOrder.findUnique({ where: { id }, select: { rooftopId: true } });
   if (!ro) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -51,9 +47,6 @@ export async function POST(req: NextRequest, { params }: Params) {
   const user = session.user as { id: string; rooftopId?: string };
   const { id } = await params;
 
-  const enabled = await flagEnabled("canned_inspections" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
-
   const ro = await db.repairOrder.findUnique({ where: { id }, select: { rooftopId: true } });
   if (!ro) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (ro.rooftopId !== user.rooftopId) {
@@ -77,8 +70,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!template) return NextResponse.json({ error: "Template not found" }, { status: 404 });
 
   // Check not already attached
-  const existing = await db.roInspection.findUnique({
-    where: { repairOrderId_templateId: { repairOrderId: id, templateId: template.id } },
+  const existing = await db.roInspection.findFirst({
+    where: { repairOrderId: id, templateId: template.id },
   });
   if (existing) return NextResponse.json({ error: "Template already attached to this RO" }, { status: 409 });
 

@@ -38,7 +38,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   const enabled = await flagEnabled("canned_inspections" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   const { id } = await params;
 

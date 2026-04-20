@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { id, orderId } = await params;
 
   const enabled = await flagEnabled("parts_ordering" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "Feature not enabled" }, { status: 403 });
+  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
 
   const ro = await db.repairOrder.findUnique({ where: { id }, select: { rooftopId: true } });
   if (!ro) return NextResponse.json({ error: "Not found" }, { status: 404 });

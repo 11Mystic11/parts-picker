@@ -13,9 +13,6 @@ import { RecallBanner } from "@/components/ro/recall-banner";
 // [FEATURE: dvi] START
 import { DVISummary } from "@/components/dvi/dvi-summary";
 // [FEATURE: dvi] END
-// [FEATURE: canned_inspections] START
-import { InspectionSummary } from "@/components/inspections/inspection-summary";
-// [FEATURE: canned_inspections] END
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -54,15 +51,6 @@ export default async function RODetailPage({ params }: Props) {
           },
         },
         // [FEATURE: dvi] END
-        // [FEATURE: canned_inspections] START
-        inspections: {
-          include: {
-            template: { select: { name: true, items: true } },
-            results: { include: { templateItem: { select: { label: true, checkType: true, unit: true } } } },
-          },
-          orderBy: { createdAt: "desc" },
-        },
-        // [FEATURE: canned_inspections] END
       },
     }),
     // Load techs in this rooftop for assignment dropdown
@@ -164,6 +152,7 @@ export default async function RODetailPage({ params }: Props) {
           laborOpCode: li.laborOpCode,
           supplier: li.supplier,
           isAccepted: li.isAccepted,
+          tags: (() => { try { return JSON.parse(li.tags ?? "[]"); } catch { return []; } })(),
         }))}
         partsSubtotal={ro.partsSubtotal}
         laborSubtotal={ro.laborSubtotal}
@@ -171,6 +160,7 @@ export default async function RODetailPage({ params }: Props) {
         taxAmount={ro.taxAmount}
         totalAmount={ro.totalAmount}
         notes={ro.notes}
+        customerId={ro.customerId ?? null}
         dmsSyncStatus={ro.dmsSyncStatus}
         dmsSyncedAt={ro.dmsSyncedAt?.toISOString() ?? null}
         dmsExternalId={ro.dmsExternalId}
@@ -183,14 +173,6 @@ export default async function RODetailPage({ params }: Props) {
         </div>
       )}
       {/* [FEATURE: dvi] END */}
-
-      {/* [FEATURE: canned_inspections] START */}
-      {ro.inspections && ro.inspections.length > 0 && (
-        <div className="mt-6 space-y-4">
-          <InspectionSummary inspections={ro.inspections} />
-        </div>
-      )}
-      {/* [FEATURE: canned_inspections] END */}
 
       {/* Override audit trail */}
       {ro.overrides.length > 0 && (
