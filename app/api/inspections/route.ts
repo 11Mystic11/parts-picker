@@ -12,6 +12,7 @@ const createSchema = z.object({
   vin: z.string().optional().nullable(),
   vehicleLabel: z.string().optional().nullable(),
   lotVehicleId: z.string().optional().nullable(),
+  techId: z.string().optional().nullable(),
 });
 
 export async function GET(req: NextRequest) {
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 });
   }
 
-  const { templateId, vin, vehicleLabel, lotVehicleId } = parsed.data;
+  const { templateId, vin, vehicleLabel, lotVehicleId, techId: requestedTechId } = parsed.data;
 
   const template = await db.inspectionTemplate.findUnique({
     where: { id: templateId },
@@ -83,11 +84,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Allow assigning to a specific tech; validate they belong to this rooftop
+  let resolvedTechId = user.id;
+  if (requestedTechId && requestedTechId !== user.id) {
+    const tech = await db.user.findUnique({ where: { id: requestedTechId }, select: { rooftopId: true } });
+    if (!tech || tech.rooftopId !== user.rooftopId) {
+      return NextResponse.json({ error: "Tech not found in this rooftop" }, { status: 400 });
+    }
+    resolvedTechId = requestedTechId;
+  }
+
   const inspection = await db.roInspection.create({
     data: {
       repairOrderId: null,
       templateId,
-      techId: user.id,
+      techId: resolvedTechId,
       vin: vin ?? null,
       vehicleLabel: vehicleLabel ?? null,
       lotVehicleId: lotVehicleId ?? null,

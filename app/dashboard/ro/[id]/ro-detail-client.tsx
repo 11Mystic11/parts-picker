@@ -301,14 +301,12 @@ function CategorizedNotesTab({ roId }: { roId: string }) {
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const NOTE_CATEGORIES_KEYS = new Set(["customer", "tech", "shop", "concern", "note"]);
-
   async function fetchMessages() {
     try {
-      const res = await fetch(`/api/ro/${roId}/messages`);
+      const res = await fetch(`/api/ro/${roId}/notes`);
       if (res.ok) {
         const all: ROMessage[] = await res.json();
-        setMessages(all.filter((m) => NOTE_CATEGORIES_KEYS.has(m.category)));
+        setMessages(all);
       }
     } catch {
       // silent
@@ -328,14 +326,14 @@ function CategorizedNotesTab({ roId }: { roId: string }) {
 
   const filtered = activeCategory === "all"
     ? messages
-    : messages.filter((m) => m.category === activeCategory || (activeCategory === "shop" && m.category === "note"));
+    : messages.filter((m) => m.category === activeCategory);
 
   async function handleSend() {
     if (!content.trim()) return;
     const postCategory = activeCategory === "all" ? "shop" : activeCategory;
     setSending(true);
     try {
-      const res = await fetch(`/api/ro/${roId}/messages`, {
+      const res = await fetch(`/api/ro/${roId}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: content.trim(), category: postCategory }),
@@ -375,9 +373,7 @@ function CategorizedNotesTab({ roId }: { roId: string }) {
             {cat.label}
             {cat.key !== "all" && (
               <span className="ml-1 opacity-60">
-                ({messages.filter((m) =>
-                  m.category === cat.key || (cat.key === "shop" && m.category === "note")
-                ).length})
+                ({messages.filter((m) => m.category === cat.key).length})
               </span>
             )}
           </button>
@@ -402,7 +398,7 @@ function CategorizedNotesTab({ roId }: { roId: string }) {
                     {msg.author.role}
                   </span>
                   <span className={`text-xs px-1.5 py-0.5 rounded font-medium capitalize ${CATEGORY_COLORS[msg.category] ?? "bg-surface text-muted-foreground"}`}>
-                    {msg.category === "note" ? "shop" : msg.category}
+                    {msg.category}
                   </span>
                   <span className="ml-auto text-xs text-muted-foreground">{timeAgo(msg.createdAt)}</span>
                 </div>
@@ -645,7 +641,7 @@ export function RODetailClient({
         .then((data) => setStockWarnings(data.results ?? []))
         .catch(() => {});
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [roId, status]);
   const lowStockIds = new Set(stockWarnings.filter((s) => s.isLow).map((s) => s.lineItemId));
   // [FEATURE: inventory_ro_integration] END

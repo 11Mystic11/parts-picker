@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronLeft, CheckCircle, AlertTriangle, Car, FileText,
-  Loader2, Plus, Link2, X, Check
+  Loader2, Plus, Link2, X, Check, Download, User
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -187,6 +187,12 @@ export default function InspectionDetailPage() {
             <span>{vehicleDisplay}</span>
             {insp.vin && <span className="font-mono text-xs">· {insp.vin}</span>}
           </div>
+          {insp.tech?.name && (
+            <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
+              <User className="h-3.5 w-3.5" />
+              {insp.tech.name}
+            </div>
+          )}
           {insp.repairOrder && (
             <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
               <FileText className="h-3.5 w-3.5" />
@@ -201,6 +207,16 @@ export default function InspectionDetailPage() {
           <span className={`text-xs px-2 py-1 rounded font-medium ${isComplete ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300" : "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"}`}>
             {isComplete ? "Complete" : "In Progress"}
           </span>
+          {insp.results.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => window.open(`/api/inspections/${id}/pdf`, "_blank")}
+            >
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              {isComplete ? "Download PDF" : "Print Blank Form"}
+            </Button>
+          )}
           {!isComplete && (
             <Button size="sm" onClick={markComplete} disabled={completing || saving}>
               {completing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <CheckCircle className="h-3.5 w-3.5 mr-1.5" />}

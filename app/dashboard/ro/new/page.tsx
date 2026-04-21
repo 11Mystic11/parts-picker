@@ -247,31 +247,51 @@ function NewROPageInner() {
   const [manualEngine, setManualEngine] = useState("");
   const [manualDrivetrain, setManualDrivetrain] = useState("");
 
-  // Pre-fill VIN + mileage from ?vin= ?mileage= (set by Document Ingest)
+  // Lot vehicle context (when coming from Schedule Appointment)
+  const [lotVehicleId, setLotVehicleId] = useState("");
+  const [lotVehicleName, setLotVehicleName] = useState("");
+  const [lotVehicleMissingVin, setLotVehicleMissingVin] = useState(false);
+
+  // Pre-fill from URL params — supports ?vin= ?mileage= (Document Ingest)
+  // and ?lotVehicleId= ?make= ?model= ?year= ?vin= (Schedule Appointment)
   useEffect(() => {
     const preVin = searchParams.get("vin");
     const preMileage = searchParams.get("mileage");
+    const preLotId = searchParams.get("lotVehicleId");
+    const preMake = searchParams.get("make");
+    const preModel = searchParams.get("model");
+    const preYear = searchParams.get("year");
+
+    if (preLotId) {
+      setLotVehicleId(preLotId);
+      const name = [preYear, preMake, preModel].filter(Boolean).join(" ");
+      if (name) setLotVehicleName(name);
+    }
+
     if (preVin && preVin.length === 17) {
       setVin(preVin.toUpperCase());
-      // Auto-trigger decode after a short delay so the field renders first
-      setTimeout(() => {
-        const trimmed = preVin.trim().toUpperCase();
-        setVinLoading(true);
-        setVinError("");
-        fetch("/api/vin/decode", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ vin: trimmed }),
+      if (preLotId) setLotVehicleMissingVin(false);
+      
+      const trimmed = preVin.trim().toUpperCase();
+      setVinLoading(true);
+      setVinError("");
+      fetch("/api/vin/decode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vin: trimmed }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.vehicle) setVehicle(data.vehicle);
+          else setVinError(data.error ?? "Could not decode pre-filled VIN.");
         })
-          .then((r) => r.json())
-          .then((data) => {
-            if (data.vehicle) setVehicle(data.vehicle);
-            else setVinError("Could not decode pre-filled VIN.");
-          })
-          .catch(() => setVinError("VIN decoder unreachable."))
-          .finally(() => setVinLoading(false));
-      }, 150);
+        .catch(() => setVinError("VIN decoder unreachable. Check your network connection."))
+        .finally(() => setVinLoading(false));
+    } else if (preLotId) {
+      // Lot vehicle exists but has no VIN — show the required callout
+      setLotVehicleMissingVin(true);
     }
+
     if (preMileage) {
       setMileage(preMileage);
     }
@@ -483,6 +503,7 @@ function NewROPageInner() {
           vin: vehicle.vin,
           mileage: miles,
           selectedServiceIds: Array.from(selectedServices),
+          ...(lotVehicleId ? { lotVehicleId } : {}),
         }),
       });
       const data = await res.json();
@@ -527,7 +548,23 @@ function NewROPageInner() {
   return (
     <div className="px-4 md:px-6 py-6 max-w-3xl">
       <h1 className="text-2xl font-bold text-foreground mb-1">New Repair Order</h1>
-      <p className="text-muted-foreground mb-6">VIN decode, service selection, and RO creation.</p>
+      <p className="text-muted-foreground mb-4">VIN decode, service selection, and RO creation.</p>
+
+      {/* Lot vehicle context banner */}
+      {lotVehicleId && lotVehicleName && (
+        <div className="mb-4 flex items-center gap-2 px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40 text-sm text-blue-800 dark:text-blue-300">
+          <Car className="h-4 w-4 shrink-0" />
+          <span>Creating RO for lot vehicle: <strong>{lotVehicleName}</strong></span>
+        </div>
+      )}
+
+      {/* VIN required callout (lot vehicle has no VIN on file) */}
+      {lotVehicleMissingVin && !vehicle && (
+        <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 text-sm text-amber-800 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>VIN required to create RO — this vehicle has no VIN on file. Enter the VIN below to continue.</span>
+        </div>
+      )}
 
       {/* Step indicator */}
       <div className="flex items-center mb-8 overflow-x-auto pb-1">

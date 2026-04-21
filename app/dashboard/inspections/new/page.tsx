@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ClipboardList, Loader2, Car } from "lucide-react";
+import { ChevronLeft, ClipboardList, Loader2, Car, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +27,14 @@ interface LotVehicle {
   make: string;
   model: string;
   stockNumber: string | null;
+  status: string;
+}
+
+interface Member {
+  id: string;
+  name: string | null;
+  role: string;
+  employeeId: string | null;
 }
 
 function NewInspectionInner() {
@@ -36,12 +44,14 @@ function NewInspectionInner() {
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [lotVehicles, setLotVehicles] = useState<LotVehicle[]>([]);
+  const [techs, setTechs] = useState<Member[]>([]);
   const [templateId, setTemplateId] = useState("");
   const [vehicleMode, setVehicleMode] = useState<"vin" | "lot">(prefilledLotVehicleId ? "lot" : "vin");
   const [vin, setVin] = useState("");
   const [vehicleLabel, setVehicleLabel] = useState("");
   const [vinDecoding, setVinDecoding] = useState(false);
   const [lotVehicleId, setLotVehicleId] = useState(prefilledLotVehicleId);
+  const [assignedTechId, setAssignedTechId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,9 +60,20 @@ function NewInspectionInner() {
       .then((r) => r.json())
       .then((d) => setTemplates(d.templates ?? []))
       .catch(() => {});
+
     fetch("/api/lot-vehicles")
       .then((r) => r.json())
-      .then((d) => setLotVehicles(d.lotVehicles ?? []))
+      .then((d) => setLotVehicles((d.vehicles ?? []).filter((v: LotVehicle) => v.status !== "sold")))
+      .catch((err) => console.error("[inspections/new] failed to fetch lot vehicles:", err));
+
+    fetch("/api/rooftop/members")
+      .then((r) => r.json())
+      .then((d) => {
+        const techList: Member[] = (d.members ?? []).filter(
+          (m: Member) => m.role === "technician" || m.role === "advisor" || m.role === "manager"
+        );
+        setTechs(techList);
+      })
       .catch(() => {});
   }, []);
 
@@ -88,6 +109,9 @@ function NewInspectionInner() {
 
     setSaving(true);
     const body: Record<string, unknown> = { templateId };
+
+    if (assignedTechId) body.techId = assignedTechId;
+
     if (vehicleMode === "vin") {
       body.vin = vin.trim() || null;
       body.vehicleLabel = vehicleLabel.trim() || null;
@@ -148,6 +172,33 @@ function NewInspectionInner() {
                   <SelectItem key={t.id} value={t.id}>
                     {t.name}
                     {t.description && <span className="text-muted-foreground"> — {t.description}</span>}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Assign to Tech */}
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5">
+            <User className="h-3.5 w-3.5 text-muted-foreground" />
+            Assign to Tech
+          </Label>
+          {techs.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Assigned to you by default.</p>
+          ) : (
+            <Select value={assignedTechId} onValueChange={(v) => setAssignedTechId(v === "self" ? "" : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Assign to self (default)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="self">Assign to self (default)</SelectItem>
+                {techs.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name ?? "Unnamed"}
+                    {t.employeeId && <span className="text-muted-foreground"> · #{t.employeeId}</span>}
+                    <span className="text-muted-foreground ml-1 capitalize">({t.role})</span>
                   </SelectItem>
                 ))}
               </SelectContent>

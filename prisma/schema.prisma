@@ -122,6 +122,7 @@ model Rooftop {
   // [FEATURE: fleet_accounts] END
   lotVehicles         LotVehicle[]
   customers           Customer[]
+  customerVehicles    CustomerVehicle[]
   partTags            PartTag[]
 
   @@index([organizationId])
@@ -153,6 +154,7 @@ model User {
   additionalRooftops  UserRooftop[]
   importBatches       ImportBatch[]
   roMessages          ROMessage[]   @relation("UserROMessages")
+  roNotes             RONote[]      @relation("UserRONotes")
   announcements       Announcement[] @relation("UserAnnouncements")
   techRepairOrders    RepairOrder[] @relation("TechRepairOrders")
   inventoryMovements  InventoryMovement[]
@@ -442,6 +444,7 @@ model RepairOrder {
   overrides    ROOverride[]
   auditLogs    AuditLog[]
   messages     ROMessage[]
+  roNotes      RONote[]
   // [FEATURE: customer_approval_portal] START
   approvalToken  ROApprovalToken?
   lineDecisions  ROLineItemDecision[]
@@ -599,6 +602,23 @@ model ROMessage {
 
   repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
   author      User        @relation("UserROMessages", fields: [authorId], references: [id])
+
+  @@index([repairOrderId])
+}
+
+// RO Notes — categorized notes separate from team messages.
+// category: "customer" | "tech" | "shop" | "concern"
+model RONote {
+  id            String   @id @default(cuid())
+  repairOrderId String
+  authorId      String
+  content       String   @db.Text
+  category      String   @default("shop")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  author      User        @relation("UserRONotes", fields: [authorId], references: [id])
 
   @@index([repairOrderId])
 }
@@ -1230,11 +1250,36 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  rooftop      Rooftop       @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  rooftop      Rooftop           @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
   repairOrders RepairOrder[]
+  vehicles     CustomerVehicle[]
 
   @@index([rooftopId])
   @@index([phone])
+}
+
+model CustomerVehicle {
+  id           String   @id @default(cuid())
+  customerId   String
+  rooftopId    String
+  vin          String?
+  year         Int?
+  make         String
+  model        String
+  trim         String?
+  color        String?
+  licensePlate String?
+  mileage      Int?
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  rooftop  Rooftop  @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([rooftopId])
+  @@index([vin])
 }
 
 // ─── Part Tags ────────────────────────────────────────────────────────────────
