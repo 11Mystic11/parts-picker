@@ -188,7 +188,7 @@ function NewInspectionInner() {
           {techs.length === 0 ? (
             <p className="text-xs text-muted-foreground">Assigned to you by default.</p>
           ) : (
-            <Select value={assignedTechId} onValueChange={(v) => setAssignedTechId(v === "self" ? "" : v)}>
+            <Select value={assignedTechId} onValueChange={(v) => setAssignedTechId(!v || v === "self" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Assign to self (default)" />
               </SelectTrigger>
