@@ -126,7 +126,7 @@ export function CalendarClient({ timezone }: { timezone: string }) {
         </div>
         {/* View switcher */}
         <div className="flex gap-1 bg-surface border border-border rounded-lg p-1">
-          {([Views.MONTH, Views.WEEK, Views.DAY] as View[]).map((v) => (
+          {([Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA] as View[]).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -144,7 +144,7 @@ export function CalendarClient({ timezone }: { timezone: string }) {
       </div>
 
       {/* Calendar */}
-      <div className={cn("flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden [&_.rbc-header]:bg-surface [&_.rbc-header]:border-b [&_.rbc-header]:border-border [&_.rbc-today]:bg-primary/5 [&_.rbc-off-range-bg]:bg-surface/50 [&_.rbc-toolbar]:hidden [&_.rbc-calendar]:h-full", loading && "opacity-60 pointer-events-none")}>
+      <div className={cn("flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden [&_.rbc-header]:bg-surface [&_.rbc-header]:border-b [&_.rbc-header]:border-border [&_.rbc-today]:bg-primary/5 [&_.rbc-off-range-bg]:bg-surface/50 [&_.rbc-calendar]:h-full", loading && "opacity-60 pointer-events-none")}>
         <Calendar
           localizer={localizer}
           events={events}
@@ -157,6 +157,7 @@ export function CalendarClient({ timezone }: { timezone: string }) {
           onSelectEvent={(event) => setSelected(event as CalendarEvent)}
           style={{ height: "100%", minHeight: 500 }}
           popup
+          components={{ toolbar: () => null }}
         />
       </div>
 
@@ -185,7 +186,7 @@ export function CalendarClient({ timezone }: { timezone: string }) {
             <ChevronRight className="h-4 w-4" />
           </Button>
           <span className="text-sm font-medium text-foreground ml-2">
-            {format(date, view === Views.DAY ? "MMMM d, yyyy" : view === Views.WEEK ? "'Week of' MMM d" : "MMMM yyyy")}
+            {format(date, view === Views.DAY ? "MMMM d, yyyy" : view === Views.WEEK ? "'Week of' MMM d" : view === Views.AGENDA ? "'Agenda —' MMMM yyyy" : "MMMM yyyy")}
           </span>
         </div>
         <p className="text-xs text-muted-foreground">{events.length} scheduled RO{events.length !== 1 ? "s" : ""}</p>

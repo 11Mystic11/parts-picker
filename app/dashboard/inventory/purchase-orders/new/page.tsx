@@ -1,20 +1,29 @@
 // [FEATURE: purchase_orders]
-// Create a new Purchase Order with line items.
+// Create a new Purchase Order with line items, RO linking, and vendor PO# generation.
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, RefreshCw } from "lucide-react";
 
 interface POLine {
   partNumber: string;
   description: string;
   qtyOrdered: string;
   unitCost: string;
+  autoFilling?: boolean;
+}
+
+interface ROOption {
+  id: string;
+  roNumber: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  status: string;
 }
 
 const EMPTY_LINE: POLine = { partNumber: "", description: "", qtyOrdered: "1", unitCost: "" };
@@ -23,8 +32,31 @@ export default function NewPurchaseOrderPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [supplier, setSupplier] = useState("");
+  const [vendorPoNumber, setVendorPoNumber] = useState("");
+  const [generatingPo, setGeneratingPo] = useState(false);
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<POLine[]>([{ ...EMPTY_LINE }]);
+  const [roOptions, setRoOptions] = useState<ROOption[]>([]);
+  const [selectedRoId, setSelectedRoId] = useState<string>("");
+  const [roSearch, setRoSearch] = useState("");
+  const [showRoDropdown, setShowRoDropdown] = useState(false);
+
+  // Load open ROs for the selector
+  useEffect(() => {
+    fetch("/api/ro?limit=100")
+      .then((r) => r.json())
+      .then((d) => setRoOptions(d.ros ?? []))
+      .catch(() => {});
+  }, []);
+
+  const selectedRo = roOptions.find((r) => r.id === selectedRoId) ?? null;
+
+  const filteredRos = roSearch
+    ? roOptions.filter((r) =>
+        (r.roNumber ?? "").toLowerCase().includes(roSearch.toLowerCase()) ||
+        (r.customerName ?? "").toLowerCase().includes(roSearch.toLowerCase())
+      )
+    : roOptions;
 
   function updateLine(index: number, field: keyof POLine, value: string) {
     setLines((prev) => prev.map((l, i) => i === index ? { ...l, [field]: value } : l));
@@ -36,6 +68,37 @@ export default function NewPurchaseOrderPage() {
 
   function removeLine(index: number) {
     setLines((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function autoFillDescription(index: number) {
+    const line = lines[index];
+    if (!line.partNumber || !supplier || line.description) return;
+    setLines((prev) => prev.map((l, i) => i === index ? { ...l, autoFilling: true } : l));
+    try {
+      const params = new URLSearchParams({ supplier, partNumber: line.partNumber });
+      const res = await fetch(`/api/parts-ordering/search?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const results = data.results ?? [];
+      if (results.length >= 1 && results[0].description) {
+        setLines((prev) => prev.map((l, i) =>
+          i === index ? { ...l, description: results[0].description, unitCost: l.unitCost || String(results[0].price ?? ""), autoFilling: false } : l
+        ));
+      }
+    } finally {
+      setLines((prev) => prev.map((l, i) => i === index ? { ...l, autoFilling: false } : l));
+    }
+  }
+
+  async function generatePoNumber() {
+    setGeneratingPo(true);
+    try {
+      const res = await fetch("/api/purchase-orders/generate-po-number");
+      const data = await res.json();
+      if (data.poNumber) setVendorPoNumber(data.poNumber);
+    } finally {
+      setGeneratingPo(false);
+    }
   }
 
   const total = lines.reduce((sum, l) => {
@@ -53,6 +116,8 @@ export default function NewPurchaseOrderPage() {
       body: JSON.stringify({
         supplier,
         notes: notes || null,
+        vendorPoNumber: vendorPoNumber || null,
+        repairOrderId: selectedRoId || null,
         lines: lines.map((l) => ({
           partNumber: l.partNumber,
           description: l.description,
@@ -76,11 +141,87 @@ export default function NewPurchaseOrderPage() {
       </div>
 
       <form onSubmit={submit} className="space-y-6">
+        {/* Supplier + Vendor PO# */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5 col-span-2 sm:col-span-1">
+          <div className="space-y-1.5">
             <Label>Supplier *</Label>
             <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} required />
           </div>
+          <div className="space-y-1.5">
+            <Label>Vendor PO #</Label>
+            <div className="flex gap-2">
+              <Input
+                value={vendorPoNumber}
+                onChange={(e) => setVendorPoNumber(e.target.value)}
+                placeholder="Auto-generate or enter manually"
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={generatePoNumber}
+                disabled={generatingPo}
+                title="Generate PO number"
+              >
+                <RefreshCw className={`h-4 w-4 ${generatingPo ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Link to RO */}
+        <div className="space-y-1.5">
+          <Label>Link to Repair Order (optional)</Label>
+          <div className="relative">
+            <Input
+              placeholder="Search by RO# or customer name…"
+              value={selectedRo ? `${selectedRo.roNumber ?? selectedRo.id.slice(-6)} — ${selectedRo.customerName ?? "No customer"}` : roSearch}
+              onChange={(e) => {
+                setRoSearch(e.target.value);
+                setSelectedRoId("");
+                setShowRoDropdown(true);
+              }}
+              onFocus={() => setShowRoDropdown(true)}
+              onBlur={() => setTimeout(() => setShowRoDropdown(false), 150)}
+            />
+            {showRoDropdown && filteredRos.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 bg-background border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-surface-hover"
+                  onClick={() => { setSelectedRoId(""); setRoSearch(""); setShowRoDropdown(false); }}
+                >
+                  — No RO link —
+                </button>
+                {filteredRos.slice(0, 30).map((ro) => (
+                  <button
+                    key={ro.id}
+                    type="button"
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-surface-hover"
+                    onClick={() => { setSelectedRoId(ro.id); setRoSearch(""); setShowRoDropdown(false); }}
+                  >
+                    <span className="font-medium">{ro.roNumber ?? ro.id.slice(-6)}</span>
+                    {ro.customerName && <span className="text-muted-foreground ml-2">— {ro.customerName}</span>}
+                    <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${ro.status === "closed" ? "bg-surface text-muted-foreground" : "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300"}`}>
+                      {ro.status}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Customer info from linked RO */}
+          {selectedRo && (selectedRo.customerName || selectedRo.customerPhone) && (
+            <div className="flex gap-4 text-sm p-3 bg-surface border border-border rounded-lg mt-2">
+              <span className="text-muted-foreground">Customer:</span>
+              <span className="font-medium text-foreground">{selectedRo.customerName}</span>
+              {selectedRo.customerPhone && (
+                <span className="text-muted-foreground">{selectedRo.customerPhone}</span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-1.5">
@@ -112,6 +253,7 @@ export default function NewPurchaseOrderPage() {
                     className="h-7 text-xs"
                     value={line.partNumber}
                     onChange={(e) => updateLine(i, "partNumber", e.target.value)}
+                    onBlur={() => autoFillDescription(i)}
                     required
                   />
                 </div>
@@ -120,6 +262,7 @@ export default function NewPurchaseOrderPage() {
                     className="h-7 text-xs"
                     value={line.description}
                     onChange={(e) => updateLine(i, "description", e.target.value)}
+                    placeholder={line.autoFilling ? "Looking up…" : ""}
                     required
                   />
                 </div>

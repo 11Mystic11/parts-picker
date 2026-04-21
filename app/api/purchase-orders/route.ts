@@ -17,6 +17,8 @@ const lineSchema = z.object({
 const createSchema = z.object({
   supplier: z.string().min(1).max(100),
   notes: z.string().max(2000).optional().nullable(),
+  vendorPoNumber: z.string().max(100).optional().nullable(),
+  repairOrderId: z.string().optional().nullable(),
   lines: z.array(lineSchema).min(1),
 });
 
@@ -36,6 +38,7 @@ export async function GET(req: NextRequest) {
     include: {
       createdBy: { select: { name: true } },
       lines: true,
+      repairOrder: { select: { id: true, roNumber: true, customerName: true, customerPhone: true } },
     },
     orderBy: { createdAt: "desc" },
     take: 200,
@@ -66,6 +69,8 @@ export async function POST(req: NextRequest) {
       createdById: user.id,
       supplier: parsed.data.supplier,
       notes: parsed.data.notes ?? null,
+      vendorPoNumber: parsed.data.vendorPoNumber ?? null,
+      repairOrderId: parsed.data.repairOrderId ?? null,
       lines: {
         create: parsed.data.lines.map((l) => ({
           partNumber: l.partNumber,

@@ -37,11 +37,14 @@ export async function GET() {
 const inviteSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  role: z.enum(["advisor", "technician", "admin", "manager", "developer"]),
+  role: z.enum(["advisor", "technician", "admin", "manager"]),
   employeeId: employeeIdSchema,
 });
 
-const TEMP_PASSWORD = "TempPass123!";
+function generateTempPassword(): string {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
+  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
 
 // POST /api/admin/users — invite a new user
 export async function POST(req: NextRequest) {
@@ -60,7 +63,8 @@ export async function POST(req: NextRequest) {
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) return NextResponse.json({ error: "Email already registered" }, { status: 409 });
 
-  const hashedPassword = await bcrypt.hash(TEMP_PASSWORD, 10);
+  const tempPassword = generateTempPassword();
+  const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
   try {
     const created = await db.user.create({
@@ -69,6 +73,7 @@ export async function POST(req: NextRequest) {
         email,
         hashedPassword,
         role,
+        mustChangePassword: true,
         rooftopId: user.rooftopId,
         organizationId: user.organizationId,
         employeeId: employeeId ?? null,
@@ -76,7 +81,7 @@ export async function POST(req: NextRequest) {
       select: { id: true, name: true, email: true, role: true, employeeId: true, createdAt: true },
     });
 
-    return NextResponse.json({ user: created, tempPassword: TEMP_PASSWORD }, { status: 201 });
+    return NextResponse.json({ user: created, tempPassword }, { status: 201 });
   } catch (err: unknown) {
     if ((err as { code?: string })?.code === "P2002") {
       return NextResponse.json({ error: "Employee ID already in use on this rooftop" }, { status: 409 });

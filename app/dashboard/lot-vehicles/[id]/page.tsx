@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Truck, Pencil, Check, X, Plus, ClipboardList, Loader2 } from "lucide-react";
+import { ChevronLeft, Truck, Pencil, Check, X, Plus, ClipboardList, Loader2, Car } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,7 @@ interface LotVehicle {
   stockNumber: string | null;
   mileage: number | null;
   status: string;
+  isLoaner: boolean;
   notes: string | null;
   repairOrders: {
     id: string;
@@ -56,6 +57,8 @@ export default function LotVehicleDetailPage() {
   const [form, setForm] = useState<Partial<LotVehicle>>({});
   const [saving, setSaving] = useState(false);
   const [creatingRO, setCreatingRO] = useState(false);
+  const [vinDecoding, setVinDecoding] = useState(false);
+  const [loanerAction, setLoanerAction] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,12 +73,39 @@ export default function LotVehicleDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  async function decodeVin(vin: string) {
+    if (vin.length !== 17) return;
+    setVinDecoding(true);
+    try {
+      const res = await fetch("/api/vin/decode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vin: vin.toUpperCase() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.vehicle) {
+          setForm((f) => ({
+            ...f,
+            year: data.vehicle.year ?? f.year,
+            make: data.vehicle.make ?? f.make,
+            model: data.vehicle.model ?? f.model,
+            trim: data.vehicle.trim ?? f.trim,
+          }));
+        }
+      }
+    } catch { /* ignore */ } finally {
+      setVinDecoding(false);
+    }
+  }
+
   async function save() {
     setSaving(true);
     const res = await fetch(`/api/lot-vehicles/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        vin: form.vin ?? null,
         make: form.make,
         model: form.model,
         year: form.year ?? null,
@@ -93,6 +123,32 @@ export default function LotVehicleDetailPage() {
       await load();
     }
     setSaving(false);
+  }
+
+  async function sendToLoaners() {
+    if (!vehicle) return;
+    setLoanerAction(true);
+    const res = await fetch(`/api/lot-vehicles/${id}/send-to-loaners`, { method: "POST" });
+    setLoanerAction(false);
+    if (res.ok) {
+      await load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Failed to send to loaners.");
+    }
+  }
+
+  async function recallFromLoaners() {
+    if (!vehicle) return;
+    setLoanerAction(true);
+    const res = await fetch(`/api/lot-vehicles/${id}/send-to-loaners`, { method: "DELETE" });
+    setLoanerAction(false);
+    if (res.ok) {
+      await load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Failed to recall from loaners.");
+    }
   }
 
   async function scheduleAppointment() {
@@ -127,6 +183,11 @@ export default function LotVehicleDetailPage() {
               <span className={`text-xs font-medium px-2 py-0.5 rounded ${STATUS_STYLES[v.status] ?? STATUS_STYLES.available}`}>
                 {STATUS_LABELS[v.status] ?? v.status}
               </span>
+              {v.isLoaner && (
+                <span className="text-xs font-medium px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                  <Car className="h-3 w-3" /> Loaner
+                </span>
+              )}
               {v.stockNumber && <span className="text-xs text-muted-foreground">Stock #{v.stockNumber}</span>}
             </div>
           </div>
@@ -138,6 +199,19 @@ export default function LotVehicleDetailPage() {
                 <Pencil className="h-4 w-4 mr-1.5" />
                 Edit
               </Button>
+              {!v.isLoaner ? (
+                <Button size="sm" variant="outline" onClick={sendToLoaners} disabled={loanerAction}
+                  className="text-purple-700 border-purple-300 hover:bg-purple-50 dark:text-purple-300 dark:border-purple-700">
+                  {loanerAction ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Car className="h-4 w-4 mr-1.5" />}
+                  Send to Loaners
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={recallFromLoaners} disabled={loanerAction}
+                  className="text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-300 dark:border-amber-700">
+                  {loanerAction ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Car className="h-4 w-4 mr-1.5" />}
+                  Recall from Loaners
+                </Button>
+              )}
               <Button size="sm" onClick={scheduleAppointment} disabled={creatingRO}>
                 {creatingRO ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
                 Schedule Appointment
@@ -176,6 +250,20 @@ export default function LotVehicleDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">Stock #</Label><Input value={form.stockNumber ?? ""} onChange={(e) => setForm((f) => ({ ...f, stockNumber: e.target.value || null }))} /></div>
               <div><Label className="text-xs">Mileage</Label><Input type="number" value={form.mileage ?? ""} onChange={(e) => setForm((f) => ({ ...f, mileage: e.target.value ? parseInt(e.target.value) : null }))} /></div>
+            </div>
+            <div className="relative">
+              <Label className="text-xs">VIN</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={form.vin ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, vin: e.target.value.toUpperCase() || null }))}
+                  onBlur={(e) => decodeVin(e.target.value.toUpperCase())}
+                  placeholder="17-character VIN (auto-fills year/make/model)"
+                  className="font-mono"
+                  maxLength={17}
+                />
+                {vinDecoding && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
+              </div>
             </div>
             <div>
               <Label className="text-xs">Status</Label>

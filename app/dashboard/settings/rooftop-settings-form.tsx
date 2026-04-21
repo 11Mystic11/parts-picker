@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Building2, Wrench, DollarSign, Hash } from "lucide-react";
+import { Building2, Wrench, DollarSign, Hash, ShoppingCart, Package } from "lucide-react";
 
 const US_TIMEZONES = [
   { label: "Eastern Time",                   value: "America/New_York"   },
@@ -26,13 +26,15 @@ const US_TIMEZONES = [
 
 const OEM_OPTIONS = ["GM", "Ford", "Toyota", "Honda", "Stellantis", "BMW", "Mercedes"];
 
-type Tab = "dealership" | "oem" | "pricing" | "ronumbering";
+type Tab = "dealership" | "oem" | "pricing" | "ronumbering" | "ponumbering" | "sopnumbering";
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "dealership", label: "Dealership Info", icon: Building2 },
   { id: "oem", label: "OEM Lines", icon: Wrench },
   { id: "pricing", label: "Labor & Pricing", icon: DollarSign },
   { id: "ronumbering", label: "RO Numbering", icon: Hash },
+  { id: "ponumbering", label: "PO Numbering", icon: ShoppingCart },
+  { id: "sopnumbering", label: "SOP Numbering", icon: Package },
 ];
 
 type Rooftop = {
@@ -49,6 +51,12 @@ type Rooftop = {
   roNumberAlphaGroup: string | null;
   roNumberNext: number;
   roNumberPadding: number;
+  poNumberPrefix: string | null;
+  poNumberNext: number;
+  poNumberPadding: number;
+  sopNumberPrefix: string | null;
+  sopNumberNext: number;
+  sopNumberPadding: number;
 };
 
 export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
@@ -64,6 +72,12 @@ export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
     roNumberAlphaGroup: rooftop.roNumberAlphaGroup ?? "",
     roNumberNext: rooftop.roNumberNext,
     roNumberPadding: rooftop.roNumberPadding,
+    poNumberPrefix: rooftop.poNumberPrefix ?? "PO-",
+    poNumberNext: rooftop.poNumberNext,
+    poNumberPadding: rooftop.poNumberPadding,
+    sopNumberPrefix: rooftop.sopNumberPrefix ?? "SOP-",
+    sopNumberNext: rooftop.sopNumberNext,
+    sopNumberPadding: rooftop.sopNumberPadding,
   });
 
   const [oems, setOems] = useState<string[]>(() => {
@@ -105,6 +119,12 @@ export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
         roNumberAlphaGroup: form.roNumberAlphaGroup || null,
         roNumberNext: form.roNumberNext,
         roNumberPadding: form.roNumberPadding,
+        poNumberPrefix: form.poNumberPrefix || "PO-",
+        poNumberNext: form.poNumberNext,
+        poNumberPadding: form.poNumberPadding,
+        sopNumberPrefix: form.sopNumberPrefix || "SOP-",
+        sopNumberNext: form.sopNumberNext,
+        sopNumberPadding: form.sopNumberPadding,
       }),
     });
 
@@ -331,6 +351,110 @@ export function RooftopSettingsForm({ rooftop }: { rooftop: Rooftop }) {
                 <p className="text-xs text-muted-foreground mb-1">Preview</p>
                 <p className="text-sm font-mono font-semibold text-foreground">
                   Next RO will be: {(form.roNumberPrefix || "") + (form.roNumberAlphaGroup || "") + String(form.roNumberNext).padStart(form.roNumberPadding, "0")}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "ponumbering" && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-base font-semibold text-foreground mb-1">PO Numbering</h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Configure how Purchase Order vendor numbers are auto-generated. Users can also enter PO numbers manually.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label>Prefix</Label>
+                  <Input
+                    placeholder="e.g. PO-"
+                    maxLength={10}
+                    value={form.poNumberPrefix}
+                    onChange={(e) => setForm((p) => ({ ...p, poNumberPrefix: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Digit padding</Label>
+                  <Select
+                    value={String(form.poNumberPadding)}
+                    onValueChange={(v) => setForm((p) => ({ ...p, poNumberPadding: parseInt(v ?? "4") }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[3, 4, 5, 6].map((n) => (
+                        <SelectItem key={n} value={String(n)}>{n} digits</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Next number</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={form.poNumberNext}
+                  onChange={(e) => setForm((p) => ({ ...p, poNumberNext: parseInt(e.target.value) || 1 }))}
+                />
+              </div>
+              <div className="px-4 py-3 bg-surface border border-border rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Preview</p>
+                <p className="text-sm font-mono font-semibold text-foreground">
+                  Next PO will be: {(form.poNumberPrefix || "PO-") + String(form.poNumberNext).padStart(form.poNumberPadding, "0")}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "sopnumbering" && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-base font-semibold text-foreground mb-1">SOP Numbering</h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Configure how Special Order Part vendor numbers are auto-generated. Users can also enter numbers manually.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label>Prefix</Label>
+                  <Input
+                    placeholder="e.g. SOP-"
+                    maxLength={10}
+                    value={form.sopNumberPrefix}
+                    onChange={(e) => setForm((p) => ({ ...p, sopNumberPrefix: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Digit padding</Label>
+                  <Select
+                    value={String(form.sopNumberPadding)}
+                    onValueChange={(v) => setForm((p) => ({ ...p, sopNumberPadding: parseInt(v ?? "4") }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[3, 4, 5, 6].map((n) => (
+                        <SelectItem key={n} value={String(n)}>{n} digits</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Next number</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={form.sopNumberNext}
+                  onChange={(e) => setForm((p) => ({ ...p, sopNumberNext: parseInt(e.target.value) || 1 }))}
+                />
+              </div>
+              <div className="px-4 py-3 bg-surface border border-border rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Preview</p>
+                <p className="text-sm font-mono font-semibold text-foreground">
+                  Next SOP will be: {(form.sopNumberPrefix || "SOP-") + String(form.sopNumberNext).padStart(form.sopNumberPadding, "0")}
                 </p>
               </div>
             </div>

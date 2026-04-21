@@ -81,6 +81,14 @@ model Rooftop {
   roNumberAlphaGroup String?  @default("") // e.g. "A", "B", "" — inserted between prefix and digits
   roNumberNext    Int      @default(1)   // next sequence number to assign
   roNumberPadding Int      @default(5)   // zero-padding width e.g. 5 → "00042"
+  // PO numbering config
+  poNumberPrefix  String?  @default("PO-")
+  poNumberNext    Int      @default(1)
+  poNumberPadding Int      @default(4)
+  // SOP numbering config
+  sopNumberPrefix  String?  @default("SOP-")
+  sopNumberNext    Int      @default(1)
+  sopNumberPadding Int      @default(4)
   // SMS notifications
   smsEnabled      Boolean  @default(false)
   smsFromNumber   String?
@@ -139,9 +147,10 @@ model User {
   role           String   @default("advisor")
   organizationId String?
   rooftopId      String?
-  employeeId     String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  employeeId         String?
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   organization        Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   rooftop             Rooftop?      @relation(fields: [rooftopId], references: [id], onDelete: SetNull)
@@ -479,6 +488,9 @@ model RepairOrder {
   // [FEATURE: special_orders] START
   specialOrders  SpecialOrderPart[]
   // [FEATURE: special_orders] END
+  // [FEATURE: purchase_orders] START
+  purchaseOrders PurchaseOrder[]
+  // [FEATURE: purchase_orders] END
 
   @@index([rooftopId, status])
   @@index([rooftopId, roType])
@@ -1040,22 +1052,26 @@ model SpecialOrderPart {
 // status: "draft" | "submitted" | "partial_received" | "received" | "invoiced"
 
 model PurchaseOrder {
-  id          String             @id @default(cuid())
-  rooftopId   String
-  supplier    String
-  status      String             @default("draft")
-  notes       String?            @db.Text
-  submittedAt DateTime?
-  receivedAt  DateTime?
-  createdById String
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id             String             @id @default(cuid())
+  rooftopId      String
+  supplier       String
+  status         String             @default("draft")
+  notes          String?            @db.Text
+  vendorPoNumber String?
+  repairOrderId  String?
+  submittedAt    DateTime?
+  receivedAt     DateTime?
+  createdById    String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
-  rooftop   Rooftop             @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
-  createdBy User                @relation("POCreatedBy", fields: [createdById], references: [id])
-  lines     PurchaseOrderLine[]
+  rooftop     Rooftop             @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  createdBy   User                @relation("POCreatedBy", fields: [createdById], references: [id])
+  repairOrder RepairOrder?        @relation(fields: [repairOrderId], references: [id], onDelete: SetNull)
+  lines       PurchaseOrderLine[]
 
   @@index([rooftopId, status])
+  @@index([repairOrderId])
 }
 
 model PurchaseOrderLine {
@@ -1120,12 +1136,13 @@ model LoanerVehicle {
   licensePlate String?
   color        String?
   status       String       @default("available")
+  lotVehicleId String?      // optional link back to a LotVehicle
   notes        String?      @db.Text
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  rooftop Rooftop      @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
-  loans   LoanerLoan[]
+  rooftop    Rooftop      @relation(fields: [rooftopId], references: [id], onDelete: Cascade)
+  loans      LoanerLoan[]
 
   @@index([rooftopId, status])
 }
@@ -1225,6 +1242,7 @@ model LotVehicle {
   stockNumber  String?
   mileage      Int?
   status       String   @default("available")
+  isLoaner     Boolean  @default(false)
   notes        String?  @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

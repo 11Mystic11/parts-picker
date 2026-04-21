@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -238,8 +238,26 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme();
   const [themeMounted, setThemeMounted] = useState(false);
   const role = (session?.user as any)?.role ?? "advisor";
+  const navRef = useRef<HTMLElement>(null);
 
   useEffect(() => setThemeMounted(true), []);
+
+  // Restore sidebar scroll position on mount
+  useEffect(() => {
+    const saved = sessionStorage.getItem("sidebar-scroll");
+    if (saved && navRef.current) {
+      navRef.current.scrollTop = parseInt(saved, 10);
+    }
+  }, []);
+
+  // Save sidebar scroll position before pathname changes
+  useEffect(() => {
+    return () => {
+      if (navRef.current) {
+        sessionStorage.setItem("sidebar-scroll", String(navRef.current.scrollTop));
+      }
+    };
+  }, [pathname]);
 
   const allVisibleItems = navGroups
     .filter((g) => !g.roles || g.roles.includes(role))
@@ -294,7 +312,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-4">
+        <nav ref={navRef} className="flex-1 px-3 py-2 overflow-y-auto space-y-4">
           {navGroups
             .filter((g) => !g.roles || g.roles.includes(role))
             .map((group, gi) => {

@@ -49,8 +49,29 @@ export function PartsSearchDialog({ open, onOpenChange, roId, onOrderSubmitted }
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [autoFilling, setAutoFilling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<"search" | "cart">("search");
+
+  async function autoFillFromPartNumber() {
+    if (!partNumber || !supplier) return;
+    setAutoFilling(true);
+    try {
+      const params = new URLSearchParams({ supplier, partNumber });
+      const res = await fetch(`/api/parts-ordering/search?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const results: PartResult[] = data.results ?? [];
+      if (results.length === 1 && results[0].description) {
+        setQuery(results[0].description);
+        setResults(results);
+      } else if (results.length > 0) {
+        setResults(results);
+      }
+    } finally {
+      setAutoFilling(false);
+    }
+  }
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -138,7 +159,7 @@ export function PartsSearchDialog({ open, onOpenChange, roId, onOrderSubmitted }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] sm:w-full">
+      <DialogContent className="max-w-3xl w-[calc(100vw-2rem)] sm:w-full">
         <DialogHeader>
           <DialogTitle>Order Parts</DialogTitle>
         </DialogHeader>
@@ -171,11 +192,14 @@ export function PartsSearchDialog({ open, onOpenChange, roId, onOrderSubmitted }
                     />
                   </div>
                   <div className="w-full sm:w-36">
-                    <Label className="text-xs text-muted-foreground mb-1 block">Part #</Label>
+                    <Label className="text-xs text-muted-foreground mb-1 block">
+                      Part #{autoFilling && <span className="ml-1 text-primary animate-pulse">…</span>}
+                    </Label>
                     <Input
                       placeholder="WIX-123"
                       value={partNumber}
                       onChange={(e) => setPartNumber(e.target.value)}
+                      onBlur={autoFillFromPartNumber}
                     />
                   </div>
                   <Button type="submit" disabled={searching || (!query && !partNumber)} className="w-full sm:w-auto">
@@ -189,7 +213,7 @@ export function PartsSearchDialog({ open, onOpenChange, roId, onOrderSubmitted }
 
             {/* Results */}
             {results.length > 0 && (
-              <div className="border rounded-md divide-y max-h-64 overflow-y-auto">
+              <div className="border rounded-md divide-y max-h-80 overflow-y-auto">
                 {results.map((part) => {
                   const inCart = cart.find((c) => c.partNumber === part.partNumber);
                   return (

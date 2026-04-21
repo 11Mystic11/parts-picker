@@ -5,7 +5,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ShoppingCart, Plus } from "lucide-react";
+import { ShoppingCart, Plus, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -14,10 +14,12 @@ interface PurchaseOrder {
   supplier: string;
   status: string;
   notes: string | null;
+  vendorPoNumber: string | null;
   createdAt: string;
   submittedAt: string | null;
   receivedAt: string | null;
   createdBy: { name: string | null };
+  repairOrder: { id: string; roNumber: string | null; customerName: string | null } | null;
   lines: Array<{
     id: string;
     partNumber: string;
@@ -46,30 +48,19 @@ const STATUS_COLORS: Record<string, string> = {
   invoiced: "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300",
 };
 
-const STATUS_NEXT: Record<string, string | null> = {
-  draft: "submitted",
-  submitted: "partial_received",
-  partial_received: "received",
-  received: "invoiced",
-  invoiced: null,
-};
-
-const STATUS_NEXT_LABEL: Record<string, string> = {
-  draft: "Submit",
-  submitted: "Partial Receive",
-  partial_received: "Mark Received",
-  received: "Mark Invoiced",
-};
+const OPEN_STATUSES = new Set(["draft", "submitted", "partial_received"]);
+const CLOSED_STATUSES = new Set(["received", "invoiced"]);
 
 export default function PurchaseOrdersPage() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
-  const [advancing, setAdvancing] = useState<string | null>(null);
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [openStatusMenu, setOpenStatusMenu] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const params = filter !== "all" ? `?status=${filter}` : "";
+    const params = filter !== "all" && filter !== "open" && filter !== "closed" ? `?status=${filter}` : "";
     const res = await fetch(`/api/purchase-orders${params}`);
     if (res.ok) {
       const { orders: data } = await res.json();
@@ -80,19 +71,38 @@ export default function PurchaseOrdersPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function advanceStatus(id: string, nextStatus: string) {
-    setAdvancing(id);
+  // Close status menu on outside click
+  useEffect(() => {
+    function handle() { setOpenStatusMenu(null); }
+    document.addEventListener("click", handle);
+    return () => document.removeEventListener("click", handle);
+  }, []);
+
+  async function setStatus(id: string, newStatus: string) {
+    setUpdating(id);
+    setOpenStatusMenu(null);
     await fetch(`/api/purchase-orders/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
+      body: JSON.stringify({ status: newStatus }),
     });
-    setAdvancing(null);
+    setUpdating(null);
     load();
   }
 
+  const allOrders = orders;
+
+  // Apply open/closed meta-filters client-side
+  const visibleOrders = filter === "open"
+    ? allOrders.filter((o) => OPEN_STATUSES.has(o.status))
+    : filter === "closed"
+    ? allOrders.filter((o) => CLOSED_STATUSES.has(o.status))
+    : allOrders;
+
+  const openCount = allOrders.filter((o) => OPEN_STATUSES.has(o.status)).length;
+  const closedCount = allOrders.filter((o) => CLOSED_STATUSES.has(o.status)).length;
   const counts = STATUSES.reduce((acc, s) => {
-    acc[s] = orders.filter((o) => o.status === s).length;
+    acc[s] = allOrders.filter((o) => o.status === s).length;
     return acc;
   }, {} as Record<string, number>);
 
@@ -101,7 +111,7 @@ export default function PurchaseOrdersPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl space-y-6">
+    <div className="p-6 max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <ShoppingCart className="h-6 w-6 text-primary" />
@@ -117,85 +127,145 @@ export default function PurchaseOrdersPage() {
         </Link>
       </div>
 
-      {/* Pipeline summary */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-        {STATUSES.map((s) => (
-          <div
-            key={s}
-            onClick={() => setFilter(filter === s ? "all" : s)}
-            className={`rounded-lg border p-3 cursor-pointer transition-colors ${
-              filter === s ? "border-primary bg-primary/5" : "border-border bg-surface hover:bg-surface-hover"
-            }`}
-          >
-            <p className="text-xs text-muted-foreground">{STATUS_LABELS[s]}</p>
-            <p className="text-xl font-bold text-foreground">{counts[s] ?? 0}</p>
+      <div className="flex gap-4">
+        {/* Main content */}
+        <div className="flex-1 space-y-4">
+          {/* Pipeline summary */}
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+            {STATUSES.map((s) => (
+              <div
+                key={s}
+                onClick={() => setFilter(filter === s ? "all" : s)}
+                className={`rounded-lg border p-3 cursor-pointer transition-colors ${
+                  filter === s ? "border-primary bg-primary/5" : "border-border bg-surface hover:bg-surface-hover"
+                }`}
+              >
+                <p className="text-xs text-muted-foreground">{STATUS_LABELS[s]}</p>
+                <p className="text-xl font-bold text-foreground">{counts[s] ?? 0}</p>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* List */}
-      <div className="border border-border rounded-xl overflow-hidden">
-        <div className="px-4 py-2.5 bg-surface border-b border-border flex items-center justify-between">
-          <span className="text-sm font-semibold text-muted-foreground">
-            {filter === "all" ? `All Orders (${orders.length})` : `${STATUS_LABELS[filter] ?? filter} (${orders.length})`}
-          </span>
-          {filter !== "all" && (
-            <button onClick={() => setFilter("all")} className="text-xs text-primary hover:underline">
-              Clear filter
-            </button>
-          )}
+          {/* List */}
+          <div className="border border-border rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 bg-surface border-b border-border flex items-center justify-between">
+              <span className="text-sm font-semibold text-muted-foreground">
+                {filter === "all"
+                  ? `All Orders (${visibleOrders.length})`
+                  : filter === "open"
+                  ? `Open (${visibleOrders.length})`
+                  : filter === "closed"
+                  ? `Closed (${visibleOrders.length})`
+                  : `${STATUS_LABELS[filter] ?? filter} (${visibleOrders.length})`}
+              </span>
+              {filter !== "all" && (
+                <button onClick={() => setFilter("all")} className="text-xs text-primary hover:underline">
+                  Clear filter
+                </button>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground animate-pulse">Loading…</div>
+            ) : visibleOrders.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                No purchase orders found.
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {visibleOrders.map((o) => {
+                  const cost = totalCost(o);
+                  return (
+                    <div key={o.id} className="px-4 py-3 flex items-start gap-3 hover:bg-surface-hover text-sm">
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-foreground">{o.supplier}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${STATUS_COLORS[o.status] ?? ""}`}>
+                            {STATUS_LABELS[o.status] ?? o.status}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {o.lines.length} line{o.lines.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                          {o.vendorPoNumber
+                            ? <span className="font-medium text-foreground">{o.vendorPoNumber}</span>
+                            : <span>PO #{o.id.slice(-8).toUpperCase()}</span>
+                          }
+                          <span>·</span>
+                          <span>{new Date(o.createdAt).toLocaleDateString()}</span>
+                          {o.createdBy.name && <><span>·</span><span>{o.createdBy.name}</span></>}
+                          {o.repairOrder && (
+                            <>
+                              <span>·</span>
+                              <span className="text-blue-600 dark:text-blue-400">
+                                RO: {o.repairOrder.roNumber ?? o.repairOrder.id.slice(-6)}
+                                {o.repairOrder.customerName && ` — ${o.repairOrder.customerName}`}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                        <p className="text-sm font-semibold text-foreground">${cost.toFixed(2)}</p>
+                        {/* Status dropdown — jump to any status */}
+                        <div className="relative" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs gap-1"
+                            disabled={updating === o.id}
+                            onClick={() => setOpenStatusMenu(openStatusMenu === o.id ? null : o.id)}
+                          >
+                            {updating === o.id ? "…" : "Set Status"}
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                          {openStatusMenu === o.id && (
+                            <div className="absolute right-0 mt-1 w-40 bg-background border border-border rounded-lg shadow-lg z-20 overflow-hidden">
+                              {STATUSES.map((s) => (
+                                <button
+                                  key={s}
+                                  className={`w-full text-left px-3 py-2 text-xs hover:bg-surface-hover ${o.status === s ? "font-semibold text-primary" : "text-foreground"}`}
+                                  onClick={() => setStatus(o.id, s)}
+                                >
+                                  {STATUS_LABELS[s]}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
-        {loading ? (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground animate-pulse">Loading…</div>
-        ) : orders.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-            No purchase orders found.
+        {/* Right panel — Open / Closed summary */}
+        <div className="w-44 flex-shrink-0 space-y-3">
+          <div
+            onClick={() => setFilter(filter === "open" ? "all" : "open")}
+            className={`rounded-xl border p-4 cursor-pointer transition-colors ${
+              filter === "open" ? "border-green-500 bg-green-50 dark:bg-green-900/20" : "border-border bg-surface hover:bg-surface-hover"
+            }`}
+          >
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Open</p>
+            <p className="text-3xl font-bold text-foreground mt-1">{openCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">Draft · Submitted · Partial</p>
           </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {orders.map((o) => {
-              const next = STATUS_NEXT[o.status];
-              const nextLabel = next ? STATUS_NEXT_LABEL[o.status] : null;
-              const cost = totalCost(o);
-              return (
-                <div key={o.id} className="px-4 py-3 flex items-start gap-3 hover:bg-surface-hover text-sm">
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-foreground">{o.supplier}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${STATUS_COLORS[o.status] ?? ""}`}>
-                        {STATUS_LABELS[o.status] ?? o.status}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {o.lines.length} line{o.lines.length !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                      <span>PO #{o.id.slice(-8).toUpperCase()}</span>
-                      <span>·</span>
-                      <span>{new Date(o.createdAt).toLocaleDateString()}</span>
-                      {o.createdBy.name && <><span>·</span><span>{o.createdBy.name}</span></>}
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                    <p className="text-sm font-semibold text-foreground">${cost.toFixed(2)}</p>
-                    {next && nextLabel && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => advanceStatus(o.id, next)}
-                        disabled={advancing === o.id}
-                        className="text-xs"
-                      >
-                        {advancing === o.id ? "…" : nextLabel}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          <div
+            onClick={() => setFilter(filter === "closed" ? "all" : "closed")}
+            className={`rounded-xl border p-4 cursor-pointer transition-colors ${
+              filter === "closed" ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20" : "border-border bg-surface hover:bg-surface-hover"
+            }`}
+          >
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Closed</p>
+            <p className="text-3xl font-bold text-foreground mt-1">{closedCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">Received · Invoiced</p>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

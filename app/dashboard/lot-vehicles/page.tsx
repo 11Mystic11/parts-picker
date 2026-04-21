@@ -20,6 +20,7 @@ interface LotVehicle {
   stockNumber: string | null;
   mileage: number | null;
   status: string;
+  isLoaner: boolean;
   notes: string | null;
   createdAt: string;
 }
@@ -144,9 +145,16 @@ export default function LotVehiclesPage() {
                       </p>
                       {v.color && <p className="text-xs text-muted-foreground">{v.color}</p>}
                     </div>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded ${STATUS_STYLES[v.status] ?? STATUS_STYLES.available}`}>
-                      {STATUS_LABELS[v.status] ?? v.status}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded ${STATUS_STYLES[v.status] ?? STATUS_STYLES.available}`}>
+                        {STATUS_LABELS[v.status] ?? v.status}
+                      </span>
+                      {v.isLoaner && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">
+                          Loaner
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {v.stockNumber && (

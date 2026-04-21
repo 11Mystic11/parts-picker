@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     },
     include: {
       createdBy: { select: { name: true } },
-      repairOrder: { select: { roNumber: true } },
+      repairOrder: { select: { id: true, roNumber: true, customerName: true, customerPhone: true } },
     },
     orderBy: { createdAt: "desc" },
     take: 200,

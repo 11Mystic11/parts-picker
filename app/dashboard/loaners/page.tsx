@@ -5,7 +5,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Car, Plus, RefreshCw } from "lucide-react";
+import { Car, Plus, RefreshCw, FileText, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface LoanerLoan {
@@ -25,6 +25,7 @@ interface LoanerVehicle {
   licensePlate: string | null;
   color: string | null;
   status: string;
+  lotVehicleId: string | null;
   notes: string | null;
   loans: LoanerLoan[];
 }
@@ -118,7 +119,14 @@ export default function LoanersPage() {
                 {/* Vehicle header */}
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="font-semibold text-foreground">{v.year} {v.make} {v.model}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-semibold text-foreground">{v.year} {v.make} {v.model}</p>
+                      {v.lotVehicleId && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center gap-0.5">
+                          <Truck className="h-2.5 w-2.5" /> Lot
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {v.licensePlate && <span>{v.licensePlate} · </span>}
                       {v.color && <span>{v.color} · </span>}
@@ -143,17 +151,28 @@ export default function LoanersPage() {
                 )}
 
                 {/* Actions */}
-                {v.status === "loaned" && activeLoan && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full text-xs"
-                    disabled={checkingIn === activeLoan.id}
-                    onClick={() => quickCheckIn(v.id, activeLoan.id, 0)}
+                <div className="flex gap-2">
+                  {v.status === "loaned" && activeLoan && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-xs"
+                      disabled={checkingIn === activeLoan.id}
+                      onClick={() => quickCheckIn(v.id, activeLoan.id, 0)}
+                    >
+                      {checkingIn === activeLoan.id ? "Checking in…" : "Check In"}
+                    </Button>
+                  )}
+                  <a
+                    href={`/api/loaners/${v.id}/pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center h-8 px-3 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors gap-1"
+                    title="Download loaner agreement PDF"
                   >
-                    {checkingIn === activeLoan.id ? "Checking in…" : "Check In"}
-                  </Button>
-                )}
+                    <FileText className="h-3.5 w-3.5" /> PDF
+                  </a>
+                </div>
               </div>
             );
           })}

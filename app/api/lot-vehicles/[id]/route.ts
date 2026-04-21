@@ -22,6 +22,7 @@ const updateSchema = z.object({
   mileage: z.number().int().min(0).optional().nullable(),
   notes: z.string().optional().nullable(),
   status: z.enum(["available", "in_service", "sold"]).optional(),
+  isLoaner: z.boolean().optional(),
 });
 
 async function getVehicle(id: string, rooftopId: string) {

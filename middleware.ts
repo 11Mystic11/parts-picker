@@ -20,6 +20,31 @@ export default withAuth(
       }
     }
 
+    // Technician-restricted routes (server-side security)
+    if (token?.role === "technician") {
+      if (
+        pathname === "/dashboard" ||
+        pathname.startsWith("/dashboard/ro/new") ||
+        pathname.startsWith("/dashboard/calendar") ||
+        pathname.startsWith("/dashboard/customers") ||
+        pathname.startsWith("/dashboard/inventory") ||
+        pathname.startsWith("/dashboard/analytics") ||
+        pathname.startsWith("/dashboard/settings")
+      ) {
+        return NextResponse.redirect(new URL("/dashboard/tech", req.url));
+      }
+    }
+
+    // Force password change: redirect to /dashboard/change-password if flag set
+    const mustChangePassword = token?.mustChangePassword as boolean | undefined;
+    if (
+      mustChangePassword &&
+      !pathname.startsWith("/dashboard/change-password") &&
+      !pathname.startsWith("/api/auth")
+    ) {
+      return NextResponse.redirect(new URL("/dashboard/change-password", req.url));
+    }
+
     // MFA enforcement: redirect to /auth/mfa only when the mfa_enforcement feature
     // flag is enabled AND the rooftop policy requires MFA AND the user hasn't verified.
     const mfaRequired = token?.rooftopMfaRequired as boolean | undefined;

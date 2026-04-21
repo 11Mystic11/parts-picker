@@ -18,6 +18,14 @@ const schema = z.object({
   roNumberAlphaGroup: z.string().max(4).optional().nullable(),
   roNumberNext: z.number().int().min(1).optional(),
   roNumberPadding: z.number().int().min(3).max(9).optional(),
+  // PO numbering
+  poNumberPrefix: z.string().max(10).optional().nullable(),
+  poNumberNext: z.number().int().min(1).optional(),
+  poNumberPadding: z.number().int().min(3).max(7).optional(),
+  // SOP numbering
+  sopNumberPrefix: z.string().max(10).optional().nullable(),
+  sopNumberNext: z.number().int().min(1).optional(),
+  sopNumberPadding: z.number().int().min(3).max(7).optional(),
 });
 
 export async function PATCH(

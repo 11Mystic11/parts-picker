@@ -58,6 +58,7 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           rooftopId: user.rooftopId,
           organizationId: user.organizationId,
+          mustChangePassword: user.mustChangePassword,
           // MFA not verified yet on a fresh login
           mfaVerified: !mfaEnabled,
           rooftopMfaRequired,
@@ -75,10 +76,16 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role;
         token.rooftopId = (user as any).rooftopId;
         token.organizationId = (user as any).organizationId;
+        token.mustChangePassword = (user as any).mustChangePassword ?? false;
         token.mfaVerified = (user as any).mfaVerified ?? true;
         token.rooftopMfaRequired = (user as any).rooftopMfaRequired ?? false;
         token.mfaEnforcementEnabled = (user as any).mfaEnforcementEnabled ?? false;
         token.availableRooftops = (user as any).availableRooftops ?? [];
+      }
+
+      // Allow clearing mustChangePassword after password change
+      if (trigger === "update" && session && typeof session.mustChangePassword === "boolean") {
+        token.mustChangePassword = session.mustChangePassword;
       }
 
       // Handle session.update() calls from the client
