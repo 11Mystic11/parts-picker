@@ -5,8 +5,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Package, RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
+import { Package, RefreshCw, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 
 interface PartRequest {
@@ -36,10 +38,15 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function PartsRequestsPage() {
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role ?? "";
+  const canSubmit = ["advisor", "manager", "admin"].includes(role);
+
   const [requests, setRequests] = useState<PartRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [advancing, setAdvancing] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("pending");
+  const [pendingStatus, setPendingStatus] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,12 +137,7 @@ export default function PartsRequestsPage() {
         ) : (
           <div className="divide-y divide-border">
             {requests.map((req) => {
-              const next = req.status === "pending" ? "ordered"
-                : req.status === "ordered" ? "received"
-                : null;
-              const nextLabel = req.status === "pending" ? "Mark Pulled"
-                : req.status === "ordered" ? "Mark Ready"
-                : null;
+              const selected = pendingStatus[req.id];
 
               return (
                 <div key={req.id} className="px-4 py-3 flex items-start gap-3 hover:bg-surface-hover text-sm">
@@ -168,7 +170,7 @@ export default function PartsRequestsPage() {
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLOR[req.status] ?? ""}`}>
                       {STATUS_LABEL[req.status] ?? req.status}
                     </span>
-                    {next && nextLabel && (
+                    {canSubmit && req.status === "pending" && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -176,8 +178,44 @@ export default function PartsRequestsPage() {
                         disabled={advancing === req.id}
                         className="text-xs"
                       >
-                        {nextLabel}
+                        Submit Order
                       </Button>
+                    )}
+                    {canSubmit && req.status === "ordered" && (
+                      <div className="flex items-center gap-1.5">
+                        <Select
+                          value={selected ?? ""}
+                          onValueChange={(v) => setPendingStatus((prev) => ({ ...prev, [req.id]: v }))}
+                        >
+                          <SelectTrigger className="h-7 w-28 text-xs">
+                            <SelectValue placeholder="Set status…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="received">Mark Ready</SelectItem>
+                            <SelectItem value="cancelled">Cancel</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 px-2"
+                          disabled={!selected || advancing === req.id}
+                          onClick={async () => {
+                            if (!selected) return;
+                            setAdvancing(req.id);
+                            await fetch(`/api/ro/${req.repairOrderId}/part-requests?requestId=${req.id}`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ status: selected }),
+                            });
+                            setPendingStatus((prev) => { const n = { ...prev }; delete n[req.id]; return n; });
+                            setAdvancing(null);
+                            load();
+                          }}
+                        >
+                          Save
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>

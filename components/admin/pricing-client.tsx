@@ -22,7 +22,7 @@ export function PricingClient({ rooftopId }: { rooftopId: string }) {
     fetch("/api/admin/pricing")
       .then((r) => r.json())
       .then((d) => { setTiers(d.tiers ?? []); setLoading(false); });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [rooftopId]);
 
   function updateTier(index: number, field: keyof Tier, raw: string) {

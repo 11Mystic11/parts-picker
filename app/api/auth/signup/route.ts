@@ -18,7 +18,7 @@ function slugify(str: string) {
 }
 
 async function uniqueSlug(base: string, table: "organization" | "rooftop") {
-  let slug = slugify(base);
+  const slug = slugify(base);
   let attempt = 0;
   while (true) {
     const candidate = attempt === 0 ? slug : `${slug}-${attempt}`;

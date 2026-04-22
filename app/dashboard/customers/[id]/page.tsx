@@ -268,6 +268,7 @@ export default function CustomerDetailPage() {
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesValue, setNotesValue] = useState("");
   const [showAddVehicle, setShowAddVehicle] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadVehicles = useCallback(async () => {
     const res = await fetch(`/api/customers/${id}/vehicles`);
@@ -317,6 +318,13 @@ export default function CustomerDetailPage() {
     await load();
   }
 
+  async function handleDelete() {
+    if (!confirm("Delete this customer and all their records? This cannot be undone.")) return;
+    setDeleting(true);
+    await fetch(`/api/customers/${id}`, { method: "DELETE" });
+    router.push("/dashboard/customers");
+  }
+
   async function scheduleAppointment() {
     if (!customer) return;
     router.push(`/dashboard/ro/new?customerId=${customer.id}&customerName=${encodeURIComponent(customer.name)}&customerPhone=${encodeURIComponent(customer.phone ?? "")}&customerEmail=${encodeURIComponent(customer.email ?? "")}`);
@@ -357,6 +365,10 @@ export default function CustomerDetailPage() {
           {!editing ? (
             <>
               <Button size="sm" variant="outline" onClick={() => setEditing(true)}><Pencil className="h-4 w-4 mr-1.5" />Edit</Button>
+              <Button size="sm" variant="outline" onClick={handleDelete} disabled={deleting}
+                className="text-destructive border-destructive/40 hover:bg-destructive/10">
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              </Button>
               <Button size="sm" onClick={scheduleAppointment}><Plus className="h-4 w-4 mr-1.5" />Schedule Appointment</Button>
             </>
           ) : (

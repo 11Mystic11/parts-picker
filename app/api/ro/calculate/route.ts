@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
 
   // Resolve parts and labor in parallel
   const [parts, laborOps] = await Promise.all([
-    getPartsForServices(oem, selectedServiceIds, vehicle),
+    getPartsForServices(oem, selectedServiceIds, vehicle, rooftopId),
     getLaborForServices(oem, selectedServiceIds, vehicle),
   ]);
 

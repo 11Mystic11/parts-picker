@@ -14,6 +14,7 @@ const createSchema = z.object({
   mileage: z.number().int().min(0),
   selectedServiceIds: z.array(z.string()).min(1),
   notes: z.string().optional(),
+  lotVehicleId: z.string().optional(),
   // [FEATURE: ro_type] — "customer" | "warranty" | "internal"
   roType: z.enum(["customer", "warranty", "internal"]).optional(),
 });
@@ -23,9 +24,13 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = session.user as { id: string; rooftopId?: string };
+  const user = session.user as { id: string; rooftopId?: string; role?: string };
   if (!user.rooftopId) {
     return NextResponse.json({ error: "No rooftop assigned to user" }, { status: 400 });
+  }
+
+  if (user.role === "technician") {
+    return NextResponse.json({ error: "Technicians cannot create ROs" }, { status: 403 });
   }
 
   let body: unknown;
@@ -43,7 +48,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { vin, mileage, selectedServiceIds, notes, roType } = parsed.data;
+  const { vin, mileage, selectedServiceIds, notes, roType, lotVehicleId } = parsed.data;
 
   // Load vehicle from cache
   const cached = await db.vehicleCache.findUnique({ where: { vin: vin.toUpperCase() } });
@@ -126,6 +131,8 @@ export async function POST(req: NextRequest) {
         taxAmount: summary.taxAmount,
         totalAmount: summary.total,
         notes: notes ?? null,
+        lotVehicleId: lotVehicleId ?? null,
+        vehicleType: lotVehicleId ? "lot" : "customer",
         // [FEATURE: ro_type]
         roType: roType ?? "customer",
       },

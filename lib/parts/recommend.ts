@@ -15,6 +15,11 @@ export type RecommendedPart = {
   serviceId: string;
   quantity: number;
   unitCost: number;
+  // Inventory enrichment
+  inventoryId?: string;
+  quantityOnHand?: number;
+  fromInventory?: boolean;   // matched inventory, in stock — cost pulled from inventory
+  isOutOfStock?: boolean;    // matched inventory, qty = 0
 };
 
 function matchesConditions(conditions: ConditionsJSON, vehicle: VehicleData): boolean {
@@ -29,13 +34,19 @@ function matchesConditions(conditions: ConditionsJSON, vehicle: VehicleData): bo
     if (!vehicle.drivetrain) return false;
     if (!conditions.drivetrains.includes(vehicle.drivetrain)) return false;
   }
+  // Trim condition: vehicle must have a trim and it must be in the list
+  if (conditions.trims?.length) {
+    if (!vehicle.trim) return false;
+    if (!conditions.trims.includes(vehicle.trim)) return false;
+  }
   return true;
 }
 
 export async function getPartsForServices(
   oem: string,
   selectedServiceIds: string[],
-  vehicle: VehicleData
+  vehicle: VehicleData,
+  rooftopId?: string
 ): Promise<RecommendedPart[]> {
   if (selectedServiceIds.length === 0) return [];
 
@@ -73,6 +84,29 @@ export async function getPartsForServices(
       quantity,
       unitCost: part.defaultCost,
     });
+  }
+
+  // Enrich with inventory data — stock-first pricing and out-of-stock flagging
+  if (rooftopId && result.length > 0) {
+    const inventory = await db.partInventory.findMany({
+      where: { rooftopId, isActive: true },
+    });
+    const invMap = new Map(inventory.map((i) => [i.partNumber.toLowerCase(), i]));
+
+    for (const part of result) {
+      const inv = invMap.get(part.partNumber.toLowerCase());
+      if (!inv) continue;
+      if (inv.quantityOnHand > 0) {
+        part.unitCost = inv.unitCost;
+        part.fromInventory = true;
+        part.inventoryId = inv.id;
+        part.quantityOnHand = inv.quantityOnHand;
+      } else {
+        part.isOutOfStock = true;
+        part.inventoryId = inv.id;
+        part.quantityOnHand = 0;
+      }
+    }
   }
 
   return result;

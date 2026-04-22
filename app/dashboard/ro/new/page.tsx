@@ -45,6 +45,8 @@ type PricedLineItem = {
   unitCost: number;
   unitPrice: number;
   totalPrice: number;
+  fromInventory?: boolean;
+  isOutOfStock?: boolean;
 };
 
 type ROEstimate = {
@@ -993,9 +995,17 @@ function NewROPageInner() {
                       <tr key={i} className="border-b border-border/50 hover:bg-surface-hover">
                         <td className="px-4 py-2">
                           <div className="font-medium text-foreground leading-snug">{li.description}</div>
-                          {li.partNumber && (
-                            <div className="text-xs text-muted-foreground font-mono">#{li.partNumber}</div>
-                          )}
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            {li.partNumber && (
+                              <span className="text-xs text-muted-foreground font-mono">#{li.partNumber}</span>
+                            )}
+                            {li.fromInventory && (
+                              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">In Stock</span>
+                            )}
+                            {li.isOutOfStock && (
+                              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Out of Stock</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-2 text-right text-muted-foreground">{li.quantity}</td>
                         <td className="px-4 py-2 text-right text-muted-foreground">

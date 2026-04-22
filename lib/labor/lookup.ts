@@ -25,6 +25,10 @@ function matchesConditions(conditions: ConditionsJSON, vehicle: VehicleData): bo
     if (!vehicle.drivetrain) return false;
     if (!conditions.drivetrains.includes(vehicle.drivetrain)) return false;
   }
+  if (conditions.trims?.length) {
+    if (!vehicle.trim) return false;
+    if (!conditions.trims.includes(vehicle.trim)) return false;
+  }
   return true;
 }
 

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Truck, Pencil, Check, X, Plus, ClipboardList, Loader2, Car } from "lucide-react";
+import { ChevronLeft, Truck, Pencil, Check, X, Plus, ClipboardList, Loader2, Car, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,6 +59,7 @@ export default function LotVehicleDetailPage() {
   const [creatingRO, setCreatingRO] = useState(false);
   const [vinDecoding, setVinDecoding] = useState(false);
   const [loanerAction, setLoanerAction] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -151,6 +152,13 @@ export default function LotVehicleDetailPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!confirm("Delete this vehicle? This cannot be undone.")) return;
+    setDeleting(true);
+    await fetch(`/api/lot-vehicles/${id}`, { method: "DELETE" });
+    router.push("/dashboard/lot-vehicles");
+  }
+
   async function scheduleAppointment() {
     if (!vehicle) return;
     setCreatingRO(true);
@@ -198,6 +206,10 @@ export default function LotVehicleDetailPage() {
               <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
                 <Pencil className="h-4 w-4 mr-1.5" />
                 Edit
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleDelete} disabled={deleting}
+                className="text-destructive border-destructive/40 hover:bg-destructive/10">
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               </Button>
               {!v.isLoaner ? (
                 <Button size="sm" variant="outline" onClick={sendToLoaners} disabled={loanerAction}

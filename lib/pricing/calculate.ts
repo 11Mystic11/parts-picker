@@ -18,6 +18,8 @@ export type PricedLineItem = {
   unitCost: number;
   unitPrice: number;
   totalPrice: number;
+  fromInventory?: boolean;
+  isOutOfStock?: boolean;
 };
 
 export type ROSummary = {
@@ -69,6 +71,8 @@ export function calculateRO(
       unitCost: part.unitCost,
       unitPrice,
       totalPrice,
+      ...(part.fromInventory && { fromInventory: true }),
+      ...(part.isOutOfStock && { isOutOfStock: true }),
     });
   }
 
