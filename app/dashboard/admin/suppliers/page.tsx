@@ -284,12 +284,13 @@ function SuppliersContent() {
                              <p className="font-medium text-foreground">Link your PartsTech Account</p>
                              <p className="text-sm text-muted-foreground">Click the button below to sign in or create an account on PartsTech. Your accounts will be securely linked automatically.</p>
                            </div>
-                           <Button asChild size="lg" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white shadow-md">
-                              <a href="/api/admin/suppliers/register">
-                                Connect to PartsTech
-                                <ExternalLink className="h-4 w-4 ml-2" />
-                              </a>
-                           </Button>
+                           <a
+                              href="/api/admin/suppliers/register"
+                              className="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium rounded-md bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-colors w-full sm:w-auto"
+                            >
+                              Connect to PartsTech
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
                            {msg && (
                             <p className="text-sm font-medium text-red-600 mt-2">
                               {msg.text}
