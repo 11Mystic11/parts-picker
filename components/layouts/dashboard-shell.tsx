@@ -93,6 +93,7 @@ const navGroups: NavGroup[] = [
       { label: "Inspections",    href: "/dashboard/inspections",    icon: ClipboardCheck },
       { label: "Calendar",       href: "/dashboard/calendar",       icon: CalendarDays },
       { label: "Document Ingest",href: "/dashboard/ingest",         icon: Upload },
+      { label: "Parts Explorer", href: "/dashboard/parts-explorer", icon: Search },
       { label: "Inventory",      href: "/dashboard/inventory",      icon: Package },
       { label: "Announcements",  href: "/dashboard/announcements",  icon: Megaphone },
       // [FEATURE: core_return_tracking] START

@@ -15,7 +15,7 @@ import { z } from "zod";
 
 const ADMIN_ROLES = ["admin", "developer"];
 
-type SupplierKey = "napa" | "autozone" | "orielly" | "worldpac" | "partstech";
+type SupplierKey = "napa" | "autozone" | "orielly" | "worldpac" | "partstech" | "nexpart";
 
 function maskValue(val: string): string {
   if (!val) return "";
@@ -61,7 +61,7 @@ export async function GET(_req: NextRequest) {
 // ─── PATCH — save one supplier's credentials ──────────────────────────────────
 
 const patchSchema = z.object({
-  supplier: z.enum(["napa", "autozone", "orielly", "worldpac", "partstech"]),
+  supplier: z.enum(["napa", "autozone", "orielly", "worldpac", "partstech", "nexpart"]),
   credentials: z.record(z.string(), z.string()),
 });
 

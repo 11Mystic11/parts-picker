@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
   }
 
   // Local-first lookup: check PartInventory and PartsCatalog before hitting supplier adapters
-  if (user.rooftopId) {
+  // Only do this if no specific supplier was requested (or 'mock' / 'local')
+  if (user.rooftopId && (supplier === "mock" || supplier === "local")) {
     if (partNumber) {
       // Exact part number match against local inventory
       const invMatches = await db.partInventory.findMany({

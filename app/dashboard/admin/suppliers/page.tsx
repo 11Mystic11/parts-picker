@@ -3,15 +3,16 @@
 // Admin page — configure parts supplier API credentials per rooftop.
 // Credentials are encrypted at rest (same as DMS config).
 
-import { useEffect, useState } from "react";
-import { ShoppingCart, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { useEffect, useState, Suspense } from "react";
+import { ShoppingCart, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight, Trash2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useSearchParams } from "next/navigation";
 
 // ─── Supplier definitions ──────────────────────────────────────────────────────
 
-type SupplierKey = "napa" | "autozone" | "orielly" | "worldpac" | "partstech";
+type SupplierKey = "napa" | "autozone" | "orielly" | "worldpac" | "partstech" | "nexpart";
 
 interface FieldDef {
   key: string;
@@ -31,10 +32,17 @@ const SUPPLIERS: {
     key: "partstech",
     name: "PartsTech",
     description: "Multi-supplier platform — one integration covers NAPA, AutoZone, O'Reilly, and more.",
-    howToGet: "Sign up at partstech.com → go to Settings → API Credentials. Best option for most shops.",
+    howToGet: "Just click Connect! You will be redirected to PartsTech to log in or create an account, and we will automatically link your shop.",
+    fields: [], // Handled by Easy Registration redirect
+  },
+  {
+    key: "nexpart",
+    name: "Nexpart Multi-Seller",
+    description: "Direct access to WHI Nexpart catalog and ordering.",
+    howToGet: "Requires a Nexpart Multi-Seller account (nexpart.com). Enter your standard login credentials below.",
     fields: [
-      { key: "apiKey", label: "API Key", placeholder: "pt_live_...", isSecret: true },
-      { key: "shopId", label: "Shop ID", placeholder: "Your PartsTech shop ID" },
+      { key: "username", label: "Username", placeholder: "Your Nexpart username" },
+      { key: "password", label: "Password", placeholder: "Your Nexpart password", isSecret: true },
     ],
   },
   {
@@ -43,8 +51,9 @@ const SUPPLIERS: {
     description: "Direct AutoZone PRO catalog access and order submission.",
     howToGet: "Contact your AutoZone commercial account rep and ask for AutoZone PRO API access. Requires an active commercial account.",
     fields: [
-      { key: "apiKey", label: "API Key", placeholder: "AutoZone PRO API key", isSecret: true },
-      { key: "storeNumber", label: "Store Number", placeholder: "e.g. 1234" },
+      { key: "username", label: "Username", placeholder: "AutoZone PRO username" },
+      { key: "password", label: "Password", placeholder: "AutoZone PRO password", isSecret: true },
+      { key: "storeNumber", label: "Store Number (optional)", placeholder: "e.g. 1234" },
     ],
   },
   {
@@ -53,8 +62,9 @@ const SUPPLIERS: {
     description: "NAPA commercial catalog search and order placement.",
     howToGet: "Through your NAPA commercial account — contact your NAPA rep and request PROLINK API credentials.",
     fields: [
-      { key: "apiKey", label: "API Key", placeholder: "NAPA PROLINK API key", isSecret: true },
-      { key: "accountId", label: "Account ID", placeholder: "Your NAPA account ID" },
+      { key: "username", label: "Username", placeholder: "NAPA PROLINK username" },
+      { key: "password", label: "Password", placeholder: "NAPA PROLINK password", isSecret: true },
+      { key: "accountId", label: "Account ID (optional)", placeholder: "Your NAPA account ID" },
       { key: "storeId", label: "Store ID (optional)", placeholder: "e.g. NAPA-0042" },
     ],
   },
@@ -64,7 +74,8 @@ const SUPPLIERS: {
     description: "O'Reilly Auto Parts commercial catalog and ordering.",
     howToGet: "Contact your O'Reilly commercial account manager to request First Call API access.",
     fields: [
-      { key: "apiKey", label: "API Key", placeholder: "O'Reilly API key", isSecret: true },
+      { key: "username", label: "Username", placeholder: "O'Reilly username" },
+      { key: "password", label: "Password", placeholder: "O'Reilly password", isSecret: true },
       { key: "accountNumber", label: "Account Number", placeholder: "Your O'Reilly account number" },
       { key: "storeId", label: "Store ID (optional)", placeholder: "e.g. 0412" },
     ],
@@ -84,7 +95,8 @@ const SUPPLIERS: {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function SuppliersPage() {
+function SuppliersContent() {
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [savedConfigs, setSavedConfigs] = useState<Record<string, Record<string, string>>>({});
   const [expanded, setExpanded] = useState<SupplierKey | null>("partstech");
@@ -103,7 +115,17 @@ export default function SuppliersPage() {
       .then((d) => setSavedConfigs(d.suppliers ?? {}))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+    if (success === "partstech") {
+      setExpanded("partstech");
+      setMessages((m) => ({ ...m, partstech: { ok: true, text: "Successfully connected to PartsTech!" } }));
+    } else if (error) {
+      setExpanded("partstech");
+      setMessages((m) => ({ ...m, partstech: { ok: false, text: `Connection failed: ${error}` } }));
+    }
+  }, [searchParams]);
 
   function setField(supplier: SupplierKey, field: string, value: string) {
     setFieldValues((prev) => ({
@@ -183,7 +205,10 @@ export default function SuppliersPage() {
       <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 px-4 py-3 text-sm text-blue-700 dark:text-blue-300 space-y-1">
         <p className="font-medium">How supplier connections work</p>
         <p>Once credentials are saved, entering a part number anywhere in the app (Order Parts, Special Orders, Purchase Orders) will search that supplier&apos;s live catalog and auto-fill the description and cost.</p>
-        <p className="font-medium mt-1">Recommended: start with PartsTech — it connects to multiple suppliers through a single API.</p>
+        <p className="font-medium mt-1 gap-1 flex items-center">
+          <CheckCircle2 className="h-4 w-4" />
+          Recommended: Start with PartsTech — one click connects you to multiple suppliers.
+        </p>
       </div>
 
       <div className="space-y-3">
@@ -194,17 +219,17 @@ export default function SuppliersPage() {
           const currentValues = fieldValues[sup.key as SupplierKey] ?? {};
 
           return (
-            <div key={sup.key} className="border border-border rounded-xl overflow-hidden">
+            <div key={sup.key} className="border border-border rounded-xl overflow-hidden shadow-sm">
               {/* Header row */}
               <button
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-hover text-left"
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-hover text-left bg-surface"
                 onClick={() => setExpanded(isOpen ? null : sup.key)}
               >
                 <div className="flex items-center gap-3">
                   {isConfigured ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                    <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
                   ) : (
-                    <XCircle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <XCircle className="h-5 w-5 text-muted-foreground/30 flex-shrink-0" />
                   )}
                   <div>
                     <p className="font-medium text-foreground text-sm">{sup.name}</p>
@@ -213,7 +238,8 @@ export default function SuppliersPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {isConfigured && (
-                    <span className="text-xs font-medium text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-medium text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40 px-2.5 py-1 rounded-full flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
                       Connected
                     </span>
                   )}
@@ -223,88 +249,142 @@ export default function SuppliersPage() {
 
               {/* Expanded form */}
               {isOpen && (
-                <div className="px-4 pb-4 pt-2 border-t border-border space-y-4 bg-surface/50">
+                <div className="px-4 pb-5 pt-3 border-t border-border space-y-4 bg-surface/30">
                   {/* How to get credentials */}
-                  <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                    <span className="font-medium">How to get credentials: </span>{sup.howToGet}
+                  <div className="rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/30 px-3 py-2.5 text-sm text-orange-800 dark:text-orange-200">
+                    <span className="font-semibold text-orange-900 dark:text-orange-100">Setup Guide: </span>{sup.howToGet}
                   </div>
 
-                  {/* Current saved config (masked) */}
-                  {isConfigured && savedConfigs[sup.key] && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Saved credentials</p>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {Object.entries(savedConfigs[sup.key]).map(([k, v]) => (
-                          <div key={k} className="text-xs">
-                            <span className="text-muted-foreground">{k}: </span>
-                            <span className="font-mono text-foreground">{v}</span>
-                          </div>
-                        ))}
-                      </div>
+                  {sup.key === "partstech" ? (
+                    /* Auto-Connect UI for PartsTech */
+                    <div className="flex flex-col items-center justify-center py-4 bg-background rounded-lg border border-border">
+                      {isConfigured ? (
+                        <div className="text-center space-y-3">
+                           <div className="mx-auto w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                             <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+                           </div>
+                           <div>
+                              <p className="font-medium">PartsTech account connected</p>
+                              <p className="text-xs text-muted-foreground mt-1">Shop ID: <span className="font-mono">{savedConfigs[sup.key].shopId}</span></p>
+                           </div>
+                           <Button
+                             variant="outline"
+                             size="sm"
+                             className="text-red-600 mt-2"
+                             onClick={() => handleClear(sup.key)}
+                             disabled={clearing === sup.key}
+                           >
+                             {clearing === sup.key ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
+                             Disconnect
+                           </Button>
+                        </div>
+                      ) : (
+                        <div className="text-center space-y-4 px-6 md:px-12 py-2">
+                           <div className="space-y-2">
+                             <p className="font-medium text-foreground">Link your PartsTech Account</p>
+                             <p className="text-sm text-muted-foreground">Click the button below to sign in or create an account on PartsTech. Your accounts will be securely linked automatically.</p>
+                           </div>
+                           <Button asChild size="lg" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white shadow-md">
+                              <a href="/api/admin/suppliers/register">
+                                Connect to PartsTech
+                                <ExternalLink className="h-4 w-4 ml-2" />
+                              </a>
+                           </Button>
+                           {msg && (
+                            <p className="text-sm font-medium text-red-600 mt-2">
+                              {msg.text}
+                            </p>
+                           )}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ) : (
+                    /* Standard Username/Password Fields for other suppliers */
+                    <>
+                      {isConfigured && savedConfigs[sup.key] && (
+                        <div className="space-y-1 bg-background p-3 rounded-lg border border-border">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Active Connection</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {Object.entries(savedConfigs[sup.key]).map(([k, v]) => (
+                              <div key={k} className="text-sm">
+                                <span className="text-muted-foreground">{k}: </span>
+                                <span className="font-mono text-foreground">{v}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
-                  {/* Credential fields */}
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      {isConfigured ? "Update credentials" : "Enter credentials"}
-                    </p>
-                    {sup.fields.map((field) => (
-                      <div key={field.key} className="space-y-1">
-                        <Label className="text-xs">{field.label}</Label>
-                        <Input
-                          type={field.isSecret ? "password" : "text"}
-                          placeholder={field.placeholder}
-                          value={currentValues[field.key] ?? ""}
-                          onChange={(e) => setField(sup.key, field.key, e.target.value)}
-                          className="h-8 text-sm"
-                          autoComplete="off"
-                        />
+                      <div className="space-y-4 pt-1">
+                        <p className="text-xs font-semibold text-foreground uppercase tracking-wider border-b border-border pb-1">
+                          {isConfigured ? "Re-enter to update credentials:" : "Enter your account details:"}
+                        </p>
+                        
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          {sup.fields.map((field) => (
+                            <div key={field.key} className="space-y-1.5">
+                              <Label className="text-sm font-medium">{field.label}</Label>
+                              <Input
+                                type={field.isSecret ? "password" : "text"}
+                                placeholder={field.placeholder}
+                                value={currentValues[field.key] ?? ""}
+                                onChange={(e) => setField(sup.key, field.key, e.target.value)}
+                                className="h-10 text-sm bg-background border-border focus-visible:ring-primary"
+                                autoComplete="off"
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ))}
-                  </div>
 
-                  {/* Message */}
-                  {msg && (
-                    <p className={`text-xs font-medium ${msg.ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                      {msg.text}
-                    </p>
+                      {msg && (
+                        <p className={`text-sm font-medium pt-1 ${msg.ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                          {msg.text}
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-3 pt-3">
+                        <Button
+                          onClick={() => handleSave(sup.key)}
+                          disabled={saving === sup.key}
+                          className="min-w-[100px]"
+                        >
+                          {saving === sup.key && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Save Connection
+                        </Button>
+                        
+                        {isConfigured && (
+                          <Button
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                            onClick={() => handleClear(sup.key)}
+                            disabled={clearing === sup.key}
+                          >
+                            {clearing === sup.key ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                            Disconnect
+                          </Button>
+                        )}
+                      </div>
+                    </>
                   )}
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      onClick={() => handleSave(sup.key)}
-                      disabled={saving === sup.key}
-                    >
-                      {saving === sup.key && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-                      Save
-                    </Button>
-                    {isConfigured && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                        onClick={() => handleClear(sup.key)}
-                        disabled={clearing === sup.key}
-                      >
-                        {clearing === sup.key ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
-                        Remove
-                      </Button>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
           );
         })}
       </div>
-
-      <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted-foreground space-y-1">
-        <p className="font-medium text-foreground text-xs uppercase tracking-wide">Note on adapter status</p>
-        <p>PartsTech, NAPA, AutoZone, O&apos;Reilly, and WorldPac adapters are structurally complete — credentials are stored and passed to each adapter. The actual API calls inside each adapter are ready to be enabled once you receive your credentials and we can verify the exact endpoints with each supplier&apos;s developer documentation.</p>
-      </div>
     </div>
   );
+}
+
+export default function SuppliersPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-6 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto" />
+      </div>
+    }>
+      <SuppliersContent />
+    </Suspense>
+  )
 }
