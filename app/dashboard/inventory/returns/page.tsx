@@ -148,9 +148,11 @@ export default function ReturnsPage() {
                       <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
                         r.returnType === "core"
                           ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
-                          : "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300"
+                          : r.returnType === "warranty"
+                          ? "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300"
+                          : "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300"
                       }`}>
-                        {r.returnType}
+                        {r.returnType === "new_return" ? "New Return" : r.returnType}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">

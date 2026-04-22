@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { X, RotateCcw } from "lucide-react";
+import { X, RotateCcw, Search, RefreshCw } from "lucide-react";
 
 interface ReturnFormProps {
   roId?: string;
@@ -26,12 +26,31 @@ export function ReturnForm({ roId, lineItemId, prefill, onClose, onSaved }: Retu
   const [partNumber, setPartNumber] = useState(prefill?.partNumber ?? "");
   const [description, setDescription] = useState(prefill?.description ?? "");
   const [supplier, setSupplier] = useState(prefill?.supplier ?? "");
-  const [returnType, setReturnType] = useState<"core" | "warranty">("core");
+  const [returnType, setReturnType] = useState<"core" | "warranty" | "new_return">("core");
+  const [searching, setSearching] = useState(false);
   const [quantity, setQuantity] = useState(prefill?.quantity ?? 1);
   const [expectedCredit, setExpectedCredit] = useState(0);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function lookupPart() {
+    if (!partNumber.trim()) return;
+    setSearching(true);
+    try {
+      const params = new URLSearchParams({ partNumber: partNumber.trim() });
+      if (supplier) params.set("supplier", supplier);
+      const res = await fetch(`/api/parts-ordering/search?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const results = data.results ?? [];
+      if (results.length >= 1) {
+        if (results[0].description && !description) setDescription(results[0].description);
+      }
+    } finally {
+      setSearching(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -80,12 +99,23 @@ export function ReturnForm({ roId, lineItemId, prefill, onClose, onSaved }: Retu
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Part Number *</label>
-              <input
-                required
-                value={partNumber}
-                onChange={(e) => setPartNumber(e.target.value)}
-                className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <div className="flex gap-1">
+                <input
+                  required
+                  value={partNumber}
+                  onChange={(e) => setPartNumber(e.target.value)}
+                  className="flex-1 min-w-0 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <button
+                  type="button"
+                  onClick={lookupPart}
+                  disabled={searching || !partNumber.trim()}
+                  title="Look up part description"
+                  className="flex-shrink-0 px-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:hover:text-white disabled:opacity-40 transition-colors"
+                >
+                  {searching ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                </button>
+              </div>
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Supplier *</label>
@@ -114,11 +144,12 @@ export function ReturnForm({ roId, lineItemId, prefill, onClose, onSaved }: Retu
               <label className="block text-xs text-gray-500 mb-1">Return Type *</label>
               <select
                 value={returnType}
-                onChange={(e) => setReturnType(e.target.value as "core" | "warranty")}
+                onChange={(e) => setReturnType(e.target.value as "core" | "warranty" | "new_return")}
                 className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="core">Core</option>
                 <option value="warranty">Warranty</option>
+                <option value="new_return">New Return</option>
               </select>
             </div>
             <div>

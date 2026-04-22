@@ -16,7 +16,7 @@ const createSchema = z.object({
   partNumber: z.string().min(1),
   description: z.string().min(1),
   supplier: z.string().min(1),
-  returnType: z.enum(["core", "warranty"]),
+  returnType: z.enum(["core", "warranty", "new_return"]),
   quantity: z.number().positive().default(1),
   expectedCredit: z.number().min(0).default(0),
   notes: z.string().optional().nullable(),
