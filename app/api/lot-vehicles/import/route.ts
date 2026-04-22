@@ -1,18 +1,31 @@
-// POST /api/lot-vehicles/import — bulk import lot vehicles from CSV text
-// Body: { csv: string } where csv has headers: vin,year,make,model,trim,color,licensePlate,stockNumber,mileage,notes
+// POST /api/lot-vehicles/import — bulk import lot vehicles
+// Body: { csv: string } for manual CSV, or { vehicles: ParsedVehicle[] } for AI-parsed data
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma as db } from "@/lib/db";
+import type { ParsedVehicle } from "./ai-parse/route";
 
-function parseCSV(text: string): Record<string, string>[] {
+function parseCSV(text: string): ParsedVehicle[] {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
   const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
   return lines.slice(1).map((line) => {
     const values = line.split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
-    return Object.fromEntries(headers.map((h, i) => [h, values[i] ?? ""]));
+    const r = Object.fromEntries(headers.map((h, i) => [h, values[i] ?? ""]));
+    return {
+      vin: r.vin || null,
+      year: r.year ? parseInt(r.year, 10) || null : null,
+      make: r.make || "Unknown",
+      model: r.model || "Unknown",
+      trim: r.trim || null,
+      color: r.color || null,
+      licensePlate: r.licenseplate || r["license plate"] || r.licenseplate || null,
+      stockNumber: r.stocknumber || r["stock number"] || r.stocknumber || null,
+      mileage: r.mileage ? parseInt(r.mileage, 10) || null : null,
+      notes: r.notes || null,
+    };
   });
 }
 
@@ -23,18 +36,22 @@ export async function POST(req: NextRequest) {
   const user = session.user as { rooftopId?: string };
   if (!user.rooftopId) return NextResponse.json({ error: "No rooftop" }, { status: 400 });
 
-  let body: { csv?: string };
+  let body: { csv?: string; vehicles?: ParsedVehicle[] };
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.csv?.trim()) {
-    return NextResponse.json({ error: "CSV data required" }, { status: 400 });
+  let rows: ParsedVehicle[];
+  if (Array.isArray(body.vehicles) && body.vehicles.length > 0) {
+    rows = body.vehicles;
+  } else if (body.csv?.trim()) {
+    rows = parseCSV(body.csv);
+  } else {
+    return NextResponse.json({ error: "CSV data or pre-parsed vehicles required" }, { status: 400 });
   }
 
-  const rows = parseCSV(body.csv);
   if (rows.length === 0) {
-    return NextResponse.json({ error: "No rows parsed from CSV" }, { status: 400 });
+    return NextResponse.json({ error: "No rows to import" }, { status: 400 });
   }
 
   const created: string[] = [];
@@ -51,14 +68,14 @@ export async function POST(req: NextRequest) {
         data: {
           rooftopId: user.rooftopId,
           vin: r.vin || null,
-          year: r.year ? parseInt(r.year, 10) || null : null,
+          year: typeof r.year === "number" ? r.year : null,
           make: r.make || "Unknown",
           model: r.model || "Unknown",
           trim: r.trim || null,
           color: r.color || null,
-          licensePlate: r.licenseplate || r["license plate"] || r.licensePlate || null,
-          stockNumber: r.stocknumber || r["stock number"] || r.stockNumber || null,
-          mileage: r.mileage ? parseInt(r.mileage, 10) || null : null,
+          licensePlate: r.licensePlate || null,
+          stockNumber: r.stockNumber || null,
+          mileage: typeof r.mileage === "number" ? r.mileage : null,
           notes: r.notes || null,
         },
       });
