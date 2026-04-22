@@ -32,8 +32,11 @@ const SUPPLIERS: {
     key: "partstech",
     name: "PartsTech",
     description: "Multi-supplier platform — one integration covers NAPA, AutoZone, O'Reilly, and more.",
-    howToGet: "Just click Connect! You will be redirected to PartsTech to log in or create an account, and we will automatically link your shop.",
-    fields: [], // Handled by Easy Registration redirect
+    howToGet: "We recommend 'One-Click Connect' below. If your system isn't live yet, you can also enter your credentials manually.",
+    fields: [
+      { key: "apiKey", label: "API Key", placeholder: "pt_live_...", isSecret: true },
+      { key: "shopId", label: "Shop ID", placeholder: "Your PartsTech shop ID" },
+    ],
   },
   {
     key: "nexpart",
@@ -257,9 +260,9 @@ function SuppliersContent() {
 
                   {sup.key === "partstech" ? (
                     /* Auto-Connect UI for PartsTech */
-                    <div className="flex flex-col items-center justify-center py-4 bg-background rounded-lg border border-border">
+                    <div className="flex flex-col items-center justify-center py-6 bg-background rounded-lg border border-border px-6 text-center">
                       {isConfigured ? (
-                        <div className="text-center space-y-3">
+                        <div className="space-y-3">
                            <div className="mx-auto w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
                            </div>
@@ -279,18 +282,50 @@ function SuppliersContent() {
                            </Button>
                         </div>
                       ) : (
-                        <div className="text-center space-y-4 px-6 md:px-12 py-2">
+                        <div className="space-y-5 w-full">
                            <div className="space-y-2">
-                             <p className="font-medium text-foreground">Link your PartsTech Account</p>
-                             <p className="text-sm text-muted-foreground">Click the button below to sign in or create an account on PartsTech. Your accounts will be securely linked automatically.</p>
+                             <p className="font-bold text-lg text-foreground">Option 1: One-Click Connect</p>
+                             <p className="text-sm text-muted-foreground">The easiest way. Click below to sign in to PartsTech and we&apos;ll automatically link your shop.</p>
+                             <Button asChild size="lg" className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md mt-2">
+                                <a href="/api/admin/suppliers/register">
+                                  Connect to PartsTech
+                                  <ExternalLink className="h-4 w-4 ml-2" />
+                                </a>
+                             </Button>
                            </div>
-                           <a
-                              href="/api/admin/suppliers/register"
-                              className="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium rounded-md bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-colors w-full sm:w-auto"
-                            >
-                              Connect to PartsTech
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
+
+                           <div className="relative py-4">
+                              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
+                              <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or connect manually</span></div>
+                           </div>
+
+                           <div className="space-y-4 text-left">
+                              <p className="text-sm font-medium">Option 2: Enter Credentials Manually</p>
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                {sup.fields.map((field) => (
+                                  <div key={field.key} className="space-y-1.5">
+                                    <Label className="text-sm font-medium">{field.label}</Label>
+                                    <Input
+                                      type={field.isSecret ? "password" : "text"}
+                                      placeholder={field.placeholder}
+                                      value={currentValues[field.key] ?? ""}
+                                      onChange={(e) => setField(sup.key, field.key, e.target.value)}
+                                      className="h-10 text-sm bg-background border-border"
+                                      autoComplete="off"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              <Button
+                                onClick={() => handleSave(sup.key)}
+                                disabled={saving === sup.key}
+                                className="w-full sm:w-auto"
+                              >
+                                {saving === sup.key && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                Save Manually
+                              </Button>
+                           </div>
+
                            {msg && (
                             <p className="text-sm font-medium text-red-600 mt-2">
                               {msg.text}

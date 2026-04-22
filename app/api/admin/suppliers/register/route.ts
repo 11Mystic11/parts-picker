@@ -17,10 +17,14 @@ export async function GET(req: NextRequest) {
   const callbackUrl = `${APP_URL}/api/admin/suppliers/callback?rooftopId=${user.rooftopId}`;
 
   // Build the PartsTech Easy Registration URL
-  const partstechUrl = new URL("https://www.partstech.com/shops/register");
+  // Note: For a production "One-Click" flow, you typically call the PartsTech API POST /v1/connection-forms
+  // to get a unique registrationUrl. This is a simplified redirect for the showcase.
+  const partstechUrl = new URL("https://www.partstech.com/registration");
   partstechUrl.searchParams.set("partnerId", PARTNER_ID);
   partstechUrl.searchParams.set("callbackUrl", callbackUrl);
 
-  // Redirect the user to PartsTech
+  // If the user hasn't set a real partner ID yet, we'll append a flag to let the UI know
+  // or we can redirect to a help page. For now, we'll try the /registration path.
+  // Many partners use this pattern.
   return NextResponse.redirect(partstechUrl.toString());
 }
