@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Loader2, Package, History, ShoppingCart, Info, ExternalLink } from "lucide-react";
+import { Search, Loader2, Package, History, ShoppingCart, Info, ExternalLink, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
