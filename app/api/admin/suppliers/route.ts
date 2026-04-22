@@ -62,7 +62,7 @@ export async function GET(_req: NextRequest) {
 
 const patchSchema = z.object({
   supplier: z.enum(["napa", "autozone", "orielly", "worldpac", "partstech"]),
-  credentials: z.record(z.string()),
+  credentials: z.record(z.string(), z.string()),
 });
 
 export async function PATCH(req: NextRequest) {
