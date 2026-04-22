@@ -16,9 +16,6 @@ export async function GET(req: NextRequest) {
 
   const user = session.user as { id: string; rooftopId?: string };
 
-  const enabled = await flagEnabled("parts_ordering" as any, user.rooftopId);
-  if (!enabled) return NextResponse.json({ error: "This feature is not enabled. Enable it in Admin → Feature Flags." }, { status: 403 });
-
   const { searchParams } = new URL(req.url);
   const supplier = searchParams.get("supplier") ?? "mock";
   const q = searchParams.get("q") ?? "";
@@ -106,7 +103,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Fall through to supplier adapter — load rooftop's supplier credentials
+  // Fall through to supplier adapter — check flag before hitting external supplier
+  const enabled = await flagEnabled("parts_ordering" as any, user.rooftopId);
+  if (!enabled) return NextResponse.json({ supplier: "none", results: [] });
+
   const rooftopRow = user.rooftopId
     ? await db.rooftop.findUnique({ where: { id: user.rooftopId }, select: { supplierConfig: true } })
     : null;

@@ -192,28 +192,17 @@ export function PartsSearchDialog({ open, onOpenChange, roId, onOrderSubmitted }
                 />
               </div>
               <div className="w-36 flex-shrink-0">
-                <Label className="text-xs text-muted-foreground mb-1 block">Part #</Label>
-                <div className="flex gap-1">
-                  <Input
-                    placeholder="WIX-123"
-                    value={partNumber}
-                    onChange={(e) => setPartNumber(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="px-2 flex-shrink-0"
-                    onClick={autoFillFromPartNumber}
-                    disabled={autoFilling || !partNumber}
-                    title="Look up part by number"
-                  >
-                    {autoFilling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-                  </Button>
-                </div>
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  Part #{autoFilling && <span className="ml-1 text-primary animate-pulse">…</span>}
+                </Label>
+                <Input
+                  placeholder="WIX-123"
+                  value={partNumber}
+                  onChange={(e) => setPartNumber(e.target.value)}
+                  onBlur={autoFillFromPartNumber}
+                />
               </div>
-              <Button type="submit" disabled={searching || (!query && !partNumber)} className="flex-shrink-0 self-end">
+              <Button type="submit" disabled={searching || (!query && !partNumber)} className="flex-shrink-0">
                 {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               </Button>
             </form>
