@@ -185,7 +185,7 @@ export default function PartsRequestsPage() {
                       <div className="flex items-center gap-1.5">
                         <Select
                           value={selected ?? ""}
-                          onValueChange={(v) => setPendingStatus((prev) => ({ ...prev, [req.id]: v }))}
+                          onValueChange={(v) => v && setPendingStatus((prev) => ({ ...prev, [req.id]: v }))}
                         >
                           <SelectTrigger className="h-7 w-28 text-xs">
                             <SelectValue placeholder="Set status…" />
