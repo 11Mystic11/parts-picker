@@ -167,9 +167,12 @@ export default function PartsExplorerPage() {
           <div>
             <h3 className="font-semibold text-amber-900 dark:text-amber-100">No external suppliers connected</h3>
             <p className="text-sm mt-1 mb-2">You are currently only searching your local inventory and offline catalogs. For live pricing, connect a supplier.</p>
-            <Button asChild variant="outline" size="sm" className="bg-white/50 dark:bg-black/50 border-amber-300 dark:border-amber-700">
-              <a href="/dashboard/admin/suppliers">Connect Suppliers</a>
-            </Button>
+            <a
+              href="/dashboard/admin/suppliers"
+              className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-md border border-amber-300 dark:border-amber-700 bg-white/50 dark:bg-black/50 hover:bg-white/80 dark:hover:bg-black/70 transition-colors"
+            >
+              Connect Suppliers
+            </a>
           </div>
         </div>
       )}
