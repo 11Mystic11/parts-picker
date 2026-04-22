@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, RefreshCw } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Search } from "lucide-react";
 
 interface POLine {
   partNumber: string;
@@ -31,6 +31,7 @@ const EMPTY_LINE: POLine = { partNumber: "", description: "", qtyOrdered: "1", u
 export default function NewPurchaseOrderPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [supplier, setSupplier] = useState("");
   const [vendorPoNumber, setVendorPoNumber] = useState("");
   const [generatingPo, setGeneratingPo] = useState(false);
@@ -72,17 +73,18 @@ export default function NewPurchaseOrderPage() {
 
   async function autoFillDescription(index: number) {
     const line = lines[index];
-    if (!line.partNumber || !supplier || line.description) return;
+    if (!line.partNumber || line.description) return;
     setLines((prev) => prev.map((l, i) => i === index ? { ...l, autoFilling: true } : l));
     try {
-      const params = new URLSearchParams({ supplier, partNumber: line.partNumber });
+      const params = new URLSearchParams({ partNumber: line.partNumber });
+      if (supplier) params.set("supplier", supplier);
       const res = await fetch(`/api/parts-ordering/search?${params}`);
       if (!res.ok) return;
       const data = await res.json();
       const results = data.results ?? [];
       if (results.length >= 1 && results[0].description) {
         setLines((prev) => prev.map((l, i) =>
-          i === index ? { ...l, description: results[0].description, unitCost: l.unitCost || String(results[0].price ?? ""), autoFilling: false } : l
+          i === index ? { ...l, description: results[0].description, unitCost: l.unitCost || String(results[0].unitCost ?? ""), autoFilling: false } : l
         ));
       }
     } finally {
@@ -102,12 +104,18 @@ export default function NewPurchaseOrderPage() {
   }
 
   const total = lines.reduce((sum, l) => {
-    return sum + (parseFloat(l.qtyOrdered) || 0) * (parseFloat(l.unitCost) || 0);
+    return sum + (parseInt(l.qtyOrdered, 10) || 0) * (parseFloat(l.unitCost) || 0);
   }, 0);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!supplier || lines.some((l) => !l.partNumber || !l.description || !l.unitCost)) return;
+    setError(null);
+    if (!supplier) { setError("Supplier is required."); return; }
+    const badLine = lines.findIndex((l) => !l.partNumber || !l.description || !l.unitCost);
+    if (badLine !== -1) {
+      setError(`Line ${badLine + 1}: Part #, description, and unit cost are all required.`);
+      return;
+    }
     setSaving(true);
 
     const res = await fetch("/api/purchase-orders", {
@@ -121,7 +129,7 @@ export default function NewPurchaseOrderPage() {
         lines: lines.map((l) => ({
           partNumber: l.partNumber,
           description: l.description,
-          qtyOrdered: parseFloat(l.qtyOrdered) || 1,
+          qtyOrdered: parseInt(l.qtyOrdered, 10) || 1,
           unitCost: parseFloat(l.unitCost) || 0,
         })),
       }),
@@ -130,6 +138,9 @@ export default function NewPurchaseOrderPage() {
     setSaving(false);
     if (res.ok) {
       router.push("/dashboard/inventory/purchase-orders");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Failed to create PO — please try again.");
     }
   }
 
@@ -248,14 +259,22 @@ export default function NewPurchaseOrderPage() {
             </div>
             {lines.map((line, i) => (
               <div key={i} className="grid grid-cols-12 gap-1 px-3 py-2 border-b border-border last:border-b-0 items-center">
-                <div className="col-span-3">
+                <div className="col-span-3 flex gap-0.5">
                   <Input
-                    className="h-7 text-xs"
+                    className="h-7 text-xs flex-1"
                     value={line.partNumber}
                     onChange={(e) => updateLine(i, "partNumber", e.target.value)}
-                    onBlur={() => autoFillDescription(i)}
                     required
                   />
+                  <button
+                    type="button"
+                    className="h-7 w-7 flex items-center justify-center rounded border border-border hover:bg-surface-hover flex-shrink-0 disabled:opacity-40"
+                    onClick={() => autoFillDescription(i)}
+                    disabled={line.autoFilling || !line.partNumber}
+                    title="Look up part"
+                  >
+                    {line.autoFilling ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+                  </button>
                 </div>
                 <div className="col-span-4">
                   <Input
@@ -270,8 +289,8 @@ export default function NewPurchaseOrderPage() {
                   <Input
                     className="h-7 text-xs text-right"
                     type="number"
-                    min="0.1"
-                    step="0.1"
+                    min="1"
+                    step="1"
                     value={line.qtyOrdered}
                     onChange={(e) => updateLine(i, "qtyOrdered", e.target.value)}
                     required
@@ -308,6 +327,7 @@ export default function NewPurchaseOrderPage() {
           </div>
         </div>
 
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => router.push("/dashboard/inventory/purchase-orders")}>
             Cancel

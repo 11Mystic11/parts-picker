@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { X, RefreshCw } from "lucide-react";
+import { X, RefreshCw, Search } from "lucide-react";
 
 interface ROOption {
   id: string;
@@ -76,10 +76,11 @@ export function SOPForm({ onClose, onSaved }: Props) {
   }
 
   async function autoFillDescription() {
-    if (!form.partNumber || !form.supplier || form.description) return;
+    if (!form.partNumber || form.description) return;
     setAutoFilling(true);
     try {
-      const params = new URLSearchParams({ supplier: form.supplier, partNumber: form.partNumber });
+      const params = new URLSearchParams({ partNumber: form.partNumber });
+      if (form.supplier) params.set("supplier", form.supplier);
       const res = await fetch(`/api/parts-ordering/search?${params}`);
       if (!res.ok) return;
       const data = await res.json();
@@ -114,7 +115,7 @@ export function SOPForm({ onClose, onSaved }: Props) {
         partNumber: form.partNumber,
         description: form.description,
         supplier: form.supplier,
-        quantity: parseFloat(form.quantity) || 1,
+        quantity: parseInt(form.quantity, 10) || 1,
         customerName: form.customerName,
         customerPhone: form.customerPhone || null,
         depositCollected: parseFloat(form.depositCollected) || 0,
@@ -181,17 +182,29 @@ export function SOPForm({ onClose, onSaved }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Part Number *</Label>
-              <Input value={form.partNumber} onChange={(e) => set("partNumber", e.target.value)} onBlur={autoFillDescription} required />
+              <div className="flex gap-1">
+                <Input value={form.partNumber} onChange={(e) => set("partNumber", e.target.value)} required className="flex-1" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="px-2 flex-shrink-0"
+                  onClick={autoFillDescription}
+                  disabled={autoFilling || !form.partNumber}
+                  title="Look up part"
+                >
+                  {autoFilling ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Qty</Label>
-              <Input type="number" min="1" value={form.quantity} onChange={(e) => set("quantity", e.target.value)} />
+              <Input type="number" min="1" step="1" value={form.quantity} onChange={(e) => set("quantity", e.target.value)} />
             </div>
           </div>
           <div className="space-y-1.5">
             <Label>
               Description *
-              {autoFilling && <span className="ml-1 text-xs text-primary animate-pulse">Looking up…</span>}
             </Label>
             <Input value={form.description} onChange={(e) => set("description", e.target.value)} placeholder={autoFilling ? "Looking up…" : ""} required />
           </div>

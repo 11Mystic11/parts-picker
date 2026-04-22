@@ -76,6 +76,8 @@ model Rooftop {
   // DMS integration
   dmsProvider    String?  // "cdk" | "reynolds" | null
   dmsConfig      String?  @db.Text // encrypted JSON: { clientId, clientSecret, dealerNumber, ... }
+  // Parts supplier connections
+  supplierConfig String?  @db.Text // encrypted JSON: { napa?: {...}, autozone?: {...}, orielly?: {...}, worldpac?: {...}, partstech?: {...} }
   // RO numbering config
   roNumberPrefix     String?  // e.g. "RO-", "WO", "" (empty = numbers only)
   roNumberAlphaGroup String?  @default("") // e.g. "A", "B", "" — inserted between prefix and digits
@@ -1029,7 +1031,7 @@ model SpecialOrderPart {
   depositCollected Float     @default(0)
   vendorPO         String?
   supplierEta      DateTime?
-  status           String    @default("ordered")
+  status           String    @default("pending")
   notes            String?   @db.Text
   createdById      String
   arrivedAt        DateTime?

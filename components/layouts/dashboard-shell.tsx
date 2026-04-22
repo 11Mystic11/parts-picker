@@ -125,6 +125,7 @@ const navGroups: NavGroup[] = [
       { label: "Rules",          href: "/dashboard/admin/rules",     icon: Wrench },
       { label: "Import",         href: "/dashboard/admin/import",    icon: DatabaseZap, roles: ["admin"] },
       { label: "DMS Config",     href: "/dashboard/admin/dms",       icon: Plug,        roles: ["admin"] },
+      { label: "Suppliers",      href: "/dashboard/admin/suppliers", icon: ShoppingCart, roles: ["admin"] },
       { label: "Feature Flags",  href: "/dashboard/admin/flags",     icon: ToggleLeft,  roles: ["admin"] },
       { label: "Pricing",        href: "/dashboard/admin/pricing",   icon: DollarSign },
       // [FEATURE: tech_time_clock] START

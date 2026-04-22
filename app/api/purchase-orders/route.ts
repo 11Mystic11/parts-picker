@@ -63,26 +63,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const order = await prisma.purchaseOrder.create({
-    data: {
-      rooftopId: user.rooftopId,
-      createdById: user.id,
-      supplier: parsed.data.supplier,
-      notes: parsed.data.notes ?? null,
-      vendorPoNumber: parsed.data.vendorPoNumber ?? null,
-      repairOrderId: parsed.data.repairOrderId ?? null,
-      lines: {
-        create: parsed.data.lines.map((l) => ({
-          partNumber: l.partNumber,
-          description: l.description,
-          qtyOrdered: l.qtyOrdered,
-          unitCost: l.unitCost,
-          inventoryId: l.inventoryId ?? null,
-        })),
-      },
-    },
-    include: { lines: true },
-  });
+  // Validate repairOrderId belongs to this rooftop if provided
+  if (parsed.data.repairOrderId) {
+    const ro = await prisma.repairOrder.findFirst({
+      where: { id: parsed.data.repairOrderId, rooftopId: user.rooftopId },
+      select: { id: true },
+    });
+    if (!ro) {
+      return NextResponse.json({ error: "Repair order not found" }, { status: 400 });
+    }
+  }
 
-  return NextResponse.json({ order }, { status: 201 });
+  try {
+    const order = await prisma.purchaseOrder.create({
+      data: {
+        rooftopId: user.rooftopId,
+        createdById: user.id,
+        status: "draft",
+        supplier: parsed.data.supplier,
+        notes: parsed.data.notes ?? null,
+        vendorPoNumber: parsed.data.vendorPoNumber ?? null,
+        repairOrderId: parsed.data.repairOrderId ?? null,
+        lines: {
+          create: parsed.data.lines.map((l) => ({
+            partNumber: l.partNumber,
+            description: l.description,
+            qtyOrdered: l.qtyOrdered,
+            unitCost: l.unitCost,
+            inventoryId: l.inventoryId ?? null,
+          })),
+        },
+      },
+      include: { lines: true },
+    });
+
+    return NextResponse.json({ order }, { status: 201 });
+  } catch (err) {
+    console.error("[purchase-orders] create error:", err);
+    return NextResponse.json({ error: "Failed to create purchase order" }, { status: 500 });
+  }
 }

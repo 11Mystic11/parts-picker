@@ -53,6 +53,7 @@ import {
   // [FEATURE: core_return_tracking] START
   RotateCcw,
   // [FEATURE: core_return_tracking] END
+  Search,
 } from "lucide-react";
 // [FEATURE: customer_approval_portal] START
 import { ApprovalSendDialog } from "@/components/ro/approval-send-dialog";
@@ -458,6 +459,25 @@ function AddPartDialog({ open, onClose, onAdd, roId }: AddPartDialogProps) {
   const [unitPrice, setUnitPrice] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [autoFilling, setAutoFilling] = useState(false);
+
+  async function autoFillFromPartNumber(val: string) {
+    if (!val.trim()) return;
+    setAutoFilling(true);
+    try {
+      const res = await fetch(`/api/parts-ordering/search?partNumber=${encodeURIComponent(val.trim())}`);
+      if (res.ok) {
+        const { results } = await res.json();
+        if (results?.length > 0) {
+          const r = results[0];
+          if (!description) setDescription(r.description ?? "");
+          if (!unitCost) setUnitCost(String(r.unitCost ?? ""));
+        }
+      }
+    } finally {
+      setAutoFilling(false);
+    }
+  }
 
   function reset() {
     setSupplier("");
@@ -527,14 +547,30 @@ function AddPartDialog({ open, onClose, onAdd, roId }: AddPartDialogProps) {
           </div>
           <div className="space-y-1.5">
             <Label>Part Number</Label>
-            <Input
-              placeholder="e.g. 85-7878"
-              value={partNumber}
-              onChange={(e) => setPartNumber(e.target.value)}
-            />
+            <div className="flex gap-1">
+              <Input
+                placeholder="e.g. 85-7878"
+                value={partNumber}
+                onChange={(e) => setPartNumber(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="px-2 flex-shrink-0"
+                onClick={() => autoFillFromPartNumber(partNumber)}
+                disabled={autoFilling || !partNumber.trim()}
+                title="Look up part"
+              >
+                {autoFilling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Description <span className="text-red-500">*</span></Label>
+            <Label className="flex items-center gap-1.5">
+              Description <span className="text-red-500">*</span>
+            </Label>
             <Input
               placeholder="e.g. Oil Filter"
               value={description}
@@ -546,7 +582,7 @@ function AddPartDialog({ open, onClose, onAdd, roId }: AddPartDialogProps) {
               <Label>Qty</Label>
               <Input
                 type="number"
-                min="0.01"
+                min="1"
                 step="1"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}

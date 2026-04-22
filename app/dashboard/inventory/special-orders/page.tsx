@@ -5,8 +5,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Package, Plus, ChevronDown } from "lucide-react";
+import { Package, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSession } from "next-auth/react";
 import { SOPStatusBadge } from "@/components/special-orders/sop-status-badge";
 import { SOPForm } from "@/components/special-orders/sop-form";
 
@@ -31,10 +33,11 @@ interface SOP {
   repairOrder: { id: string; roNumber: string | null; customerName: string | null } | null;
 }
 
-const ALL_STATUSES = ["ordered", "received", "customer_notified", "picked_up", "cancelled"];
-const PIPELINE_STATUSES = ["ordered", "received", "customer_notified", "picked_up"];
+const ALL_STATUSES = ["pending", "ordered", "received", "customer_notified", "picked_up", "cancelled"];
+const PIPELINE_STATUSES = ["pending", "ordered", "received", "customer_notified", "picked_up"];
 
 const STATUS_LABELS: Record<string, string> = {
+  pending: "Pending",
   ordered: "Ordered",
   received: "Received",
   customer_notified: "Notified",
@@ -42,7 +45,7 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-const OPEN_STATUSES = new Set(["ordered", "received", "customer_notified"]);
+const OPEN_STATUSES = new Set(["pending", "ordered", "received", "customer_notified"]);
 const CLOSED_STATUSES = new Set(["picked_up", "cancelled"]);
 
 function daysSince(iso: string) {
@@ -54,8 +57,10 @@ export default function SpecialOrdersPage() {
   const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role ?? "";
+  const canSubmit = ["advisor", "manager", "admin"].includes(role);
   const [updating, setUpdating] = useState<string | null>(null);
-  const [openStatusMenu, setOpenStatusMenu] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,15 +81,8 @@ export default function SpecialOrdersPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    function handle() { setOpenStatusMenu(null); }
-    document.addEventListener("click", handle);
-    return () => document.removeEventListener("click", handle);
-  }, []);
-
   async function setStatus(id: string, newStatus: string) {
     setUpdating(id);
-    setOpenStatusMenu(null);
     await fetch(`/api/special-orders/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -221,32 +219,33 @@ export default function SpecialOrdersPage() {
                       </div>
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                         <span className="text-xs text-muted-foreground">qty {sop.quantity}</span>
-                        {/* Status dropdown */}
-                        <div className="relative" onClick={(e) => e.stopPropagation()}>
+                        {canSubmit && sop.status === "pending" && (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-xs gap-1"
+                            className="text-xs"
                             disabled={updating === sop.id}
-                            onClick={() => setOpenStatusMenu(openStatusMenu === sop.id ? null : sop.id)}
+                            onClick={() => setStatus(sop.id, "ordered")}
                           >
-                            {updating === sop.id ? "…" : "Set Status"}
-                            <ChevronDown className="h-3 w-3" />
+                            {updating === sop.id ? "Submitting…" : "Submit Order"}
                           </Button>
-                          {openStatusMenu === sop.id && (
-                            <div className="absolute right-0 mt-1 w-44 bg-background border border-border rounded-lg shadow-lg z-20 overflow-hidden">
-                              {ALL_STATUSES.map((s) => (
-                                <button
-                                  key={s}
-                                  className={`w-full text-left px-3 py-2 text-xs hover:bg-surface-hover ${sop.status === s ? "font-semibold text-primary" : "text-foreground"}`}
-                                  onClick={() => setStatus(sop.id, s)}
-                                >
-                                  {STATUS_LABELS[s]}
-                                </button>
+                        )}
+                        {canSubmit && sop.status !== "pending" && (
+                          <Select
+                            value={sop.status}
+                            onValueChange={(v) => v && setStatus(sop.id, v)}
+                            disabled={updating === sop.id}
+                          >
+                            <SelectTrigger className="h-7 w-36 text-xs">
+                              <SelectValue>{updating === sop.id ? "Updating…" : STATUS_LABELS[sop.status] ?? sop.status}</SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ALL_STATUSES.filter((s) => s !== "pending").map((s) => (
+                                <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
                               ))}
-                            </div>
-                          )}
-                        </div>
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     </div>
                   );

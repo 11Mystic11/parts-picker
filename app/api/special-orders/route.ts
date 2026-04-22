@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
     data: {
       rooftopId: user.rooftopId,
       createdById: user.id,
+      status: "pending",
       partNumber: parsed.data.partNumber,
       description: parsed.data.description,
       supplier: parsed.data.supplier,

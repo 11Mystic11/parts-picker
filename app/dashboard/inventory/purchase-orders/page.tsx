@@ -5,8 +5,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ShoppingCart, Plus, ChevronDown } from "lucide-react";
+import { ShoppingCart, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 
 interface PurchaseOrder {
@@ -55,8 +57,10 @@ export default function PurchaseOrdersPage() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role ?? "";
+  const canSubmit = ["advisor", "manager", "admin"].includes(role);
   const [updating, setUpdating] = useState<string | null>(null);
-  const [openStatusMenu, setOpenStatusMenu] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,16 +75,8 @@ export default function PurchaseOrdersPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Close status menu on outside click
-  useEffect(() => {
-    function handle() { setOpenStatusMenu(null); }
-    document.addEventListener("click", handle);
-    return () => document.removeEventListener("click", handle);
-  }, []);
-
   async function setStatus(id: string, newStatus: string) {
     setUpdating(id);
-    setOpenStatusMenu(null);
     await fetch(`/api/purchase-orders/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -208,32 +204,33 @@ export default function PurchaseOrdersPage() {
                       </div>
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                         <p className="text-sm font-semibold text-foreground">${cost.toFixed(2)}</p>
-                        {/* Status dropdown — jump to any status */}
-                        <div className="relative" onClick={(e) => e.stopPropagation()}>
+                        {canSubmit && o.status === "draft" && (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-xs gap-1"
+                            className="text-xs"
                             disabled={updating === o.id}
-                            onClick={() => setOpenStatusMenu(openStatusMenu === o.id ? null : o.id)}
+                            onClick={() => setStatus(o.id, "submitted")}
                           >
-                            {updating === o.id ? "…" : "Set Status"}
-                            <ChevronDown className="h-3 w-3" />
+                            {updating === o.id ? "Submitting…" : "Submit Order"}
                           </Button>
-                          {openStatusMenu === o.id && (
-                            <div className="absolute right-0 mt-1 w-40 bg-background border border-border rounded-lg shadow-lg z-20 overflow-hidden">
-                              {STATUSES.map((s) => (
-                                <button
-                                  key={s}
-                                  className={`w-full text-left px-3 py-2 text-xs hover:bg-surface-hover ${o.status === s ? "font-semibold text-primary" : "text-foreground"}`}
-                                  onClick={() => setStatus(o.id, s)}
-                                >
-                                  {STATUS_LABELS[s]}
-                                </button>
+                        )}
+                        {canSubmit && o.status !== "draft" && (
+                          <Select
+                            value={o.status}
+                            onValueChange={(v) => v && setStatus(o.id, v)}
+                            disabled={updating === o.id}
+                          >
+                            <SelectTrigger className="h-7 w-36 text-xs">
+                              <SelectValue>{updating === o.id ? "Updating…" : STATUS_LABELS[o.status] ?? o.status}</SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATUSES.filter((s) => s !== "draft").map((s) => (
+                                <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
                               ))}
-                            </div>
-                          )}
-                        </div>
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     </div>
                   );
