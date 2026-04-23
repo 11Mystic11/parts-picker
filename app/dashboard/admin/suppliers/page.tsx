@@ -56,7 +56,7 @@ const SUPPLIERS: {
     howToGet: "Contact your AutoZone commercial account rep and ask for AutoZone PRO API access. Requires an active commercial account.",
     fields: [
       { key: "username", label: "Username", placeholder: "AutoZone PRO username" },
-      { key: "password", label: "Password", placeholder: "AutoZone PRO password", isSecret: true },
+      { key: "apiKey", label: "API Key / Password", placeholder: "AutoZone PRO API Key", isSecret: true },
       { key: "storeNumber", label: "Store Number (optional)", placeholder: "e.g. 1234" },
     ],
   },
@@ -66,9 +66,8 @@ const SUPPLIERS: {
     description: "NAPA commercial catalog search and order placement.",
     howToGet: "Through your NAPA commercial account — contact your NAPA rep and request PROLINK API credentials.",
     fields: [
-      { key: "username", label: "Username", placeholder: "NAPA PROLINK username" },
-      { key: "password", label: "Password", placeholder: "NAPA PROLINK password", isSecret: true },
-      { key: "accountId", label: "Account ID (optional)", placeholder: "Your NAPA account ID" },
+      { key: "apiKey", label: "API Key / Password", placeholder: "NAPA PROLINK API Key", isSecret: true },
+      { key: "accountId", label: "Account ID", placeholder: "Your NAPA account ID" },
       { key: "storeId", label: "Store ID (optional)", placeholder: "e.g. NAPA-0042" },
     ],
   },
@@ -78,8 +77,7 @@ const SUPPLIERS: {
     description: "O'Reilly Auto Parts commercial catalog and ordering.",
     howToGet: "Contact your O'Reilly commercial account manager to request First Call API access.",
     fields: [
-      { key: "username", label: "Username", placeholder: "O'Reilly username" },
-      { key: "password", label: "Password", placeholder: "O'Reilly password", isSecret: true },
+      { key: "apiKey", label: "API Key / Password", placeholder: "O'Reilly API Key", isSecret: true },
       { key: "accountNumber", label: "Account Number", placeholder: "Your O'Reilly account number" },
       { key: "storeId", label: "Store ID (optional)", placeholder: "e.g. 0412" },
     ],
@@ -217,7 +215,12 @@ function SuppliersContent() {
 
       <div className="space-y-3">
         {SUPPLIERS.map((sup) => {
-          const isConfigured = !!savedConfigs[sup.key];
+          const isDirectlyConfigured = !!savedConfigs[sup.key];
+          const isConnectedViaAggregator = (sup.key !== "partstech" && sup.key !== "nexpart") && (!!savedConfigs["partstech"] || !!savedConfigs["nexpart"]);
+          const isConfigured = isDirectlyConfigured || isConnectedViaAggregator;
+          
+          const aggregatorName = !!savedConfigs["partstech"] ? "PartsTech" : "Nexpart";
+          
           const isOpen = expanded === sup.key;
           const msg = messages[sup.key as SupplierKey];
           const currentValues = fieldValues[sup.key as SupplierKey] ?? {};
@@ -244,7 +247,7 @@ function SuppliersContent() {
                   {isConfigured && (
                     <span className="text-xs font-medium text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40 px-2.5 py-1 rounded-full flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
-                      Connected
+                      {isDirectlyConfigured ? "Connected" : `Active via ${aggregatorName}`}
                     </span>
                   )}
                   {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
