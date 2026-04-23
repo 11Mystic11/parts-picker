@@ -44,6 +44,17 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  code      String   // 6-digit OTP
+  expires   DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
 // ─── Multi-Tenancy ────────────────────────────────────────────────────────────
 
 model Organization {

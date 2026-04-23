@@ -12,27 +12,29 @@ export async function GET(req: NextRequest) {
 
 async function handleCallback(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const rooftopId = searchParams.get("rooftopId");
-
-  if (!rooftopId) {
-    return NextResponse.json({ error: "Missing rooftopId" }, { status: 400 });
-  }
+  let rooftopId = searchParams.get("rooftopId");
 
   let apiKey = "";
   let shopId = "";
 
   if (req.method === "POST") {
     try {
-      // Handle both JSON and form data depending on what PartsTech sends
-      const contentType = req.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        const body = await req.json();
+      // Handle official PartsTech response format
+      const body = await req.json();
+      
+      // PartsTech sends smsUserId (rooftopId) in the body
+      if (body.smsUserId && !rooftopId) {
+        rooftopId = body.smsUserId;
+      }
+
+      // Extract credentials from user object
+      if (body.user) {
+        apiKey = body.user.apiKey;
+        shopId = body.user.username || body.user.shopId || "";
+      } else {
+        // Fallback for flat structure
         apiKey = body.apiKey;
         shopId = body.shopId;
-      } else {
-        const formData = await req.formData();
-        apiKey = formData.get("apiKey")?.toString() ?? "";
-        shopId = formData.get("shopId")?.toString() ?? "";
       }
     } catch (e) {
       console.error("[suppliers callback] Error parsing POST body:", e);
@@ -41,6 +43,10 @@ async function handleCallback(req: NextRequest) {
     // For local mocking/testing via GET
     apiKey = searchParams.get("apiKey") ?? "pt_mock_live_key_" + Math.random().toString(36).substring(7);
     shopId = searchParams.get("shopId") ?? "SHOP_MOCK_123";
+  }
+
+  if (!rooftopId) {
+    return NextResponse.json({ error: "Missing rooftopId" }, { status: 400 });
   }
 
   if (!apiKey || !shopId) {

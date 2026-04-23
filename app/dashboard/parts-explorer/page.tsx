@@ -182,9 +182,16 @@ export default function PartsExplorerPage() {
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h2 className="text-xl font-semibold border-b border-border pb-2 flex items-center justify-between">
             <span>Results for <span className="text-primary">&quot;{query}&quot;</span></span>
-            <span className="text-sm font-normal text-muted-foreground bg-surface px-3 py-1 rounded-full border border-border shrink-0">
-               Searching {Object.keys(searchState).length} sources
-            </span>
+            <div className="flex items-center gap-2">
+              {Object.values(searchState).some(s => s.results.length > 0) && (
+                <span className="text-xs font-medium bg-green-500/10 text-green-600 dark:text-green-400 px-3 py-1 rounded-full border border-green-200 dark:border-green-800 flex items-center gap-1">
+                   <ShoppingCart className="h-3 w-3" /> Best Price Highlighted
+                </span>
+              )}
+              <span className="text-sm font-normal text-muted-foreground bg-surface px-3 py-1 rounded-full border border-border shrink-0">
+                 Searching {Object.keys(searchState).length} sources
+              </span>
+            </div>
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
@@ -234,38 +241,53 @@ export default function PartsExplorerPage() {
 
                     {source.status === "success" && source.results.length > 0 && (
                       <ul className="divide-y divide-border">
-                        {source.results.map((item, idx) => (
-                          <li key={idx} className="p-4 hover:bg-surface-hover transition-colors group">
-                            <div className="flex justify-between items-start gap-2 mb-1">
-                              <span className="font-mono text-sm font-semibold text-primary">{item.partNumber}</span>
-                              <span className={cn(
-                                "text-[10px] uppercase font-bold px-1.5 py-0.5 rounded whitespace-nowrap",
-                                item.availability === "in_stock" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                                item.availability === "out_of_stock" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                                "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                              )}>
-                                {item.availability.replace("_", " ")}
-                              </span>
-                            </div>
-                            <p className="text-sm text-foreground mb-2 line-clamp-2 leading-tight">{item.description}</p>
-                            
-                            <div className="flex items-center justify-between mt-auto">
-                              <div className="text-xs text-muted-foreground">
-                                {item.brand}
-                              </div>
-                              <div className="font-semibold text-foreground">
-                                ${(item.unitCost).toFixed(2)}
-                              </div>
-                            </div>
+                        {source.results.map((item, idx) => {
+                          // Find global min price to highlight best deal
+                          const allResults = Object.values(searchState).flatMap(s => s.results);
+                          const minPrice = Math.min(...allResults.map(r => r.unitCost));
+                          const isBestPrice = item.unitCost === minPrice;
 
-                            {/* Hover Actions (Mock setup) */}
-                            <div className="mt-3 hidden group-hover:flex items-center gap-2">
-                              <Button size="sm" variant="outline" className="w-full text-xs h-8">
-                                <ShoppingCart className="h-3 w-3 mr-1" /> Add
-                              </Button>
-                            </div>
-                          </li>
-                        ))}
+                          return (
+                            <li key={idx} className={cn(
+                              "p-4 hover:bg-surface-hover transition-colors group relative",
+                              isBestPrice && "bg-green-50/50 dark:bg-green-900/10"
+                            )}>
+                              {isBestPrice && (
+                                <div className="absolute top-0 right-0 px-2 py-0.5 bg-green-500 text-white text-[9px] font-bold uppercase rounded-bl-lg shadow-sm">
+                                  Best Price
+                                </div>
+                              )}
+                              <div className="flex justify-between items-start gap-2 mb-1">
+                                <span className="font-mono text-sm font-semibold text-primary">{item.partNumber}</span>
+                                <span className={cn(
+                                  "text-[10px] uppercase font-bold px-1.5 py-0.5 rounded whitespace-nowrap",
+                                  item.availability === "in_stock" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                                  item.availability === "out_of_stock" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                                  "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                )}>
+                                  {item.availability.replace("_", " ")}
+                                </span>
+                              </div>
+                              <p className="text-sm text-foreground mb-2 line-clamp-2 leading-tight">{item.description}</p>
+                              
+                              <div className="flex items-center justify-between mt-auto">
+                                <div className="text-xs text-muted-foreground">
+                                  {item.brand}
+                                </div>
+                                <div className={cn("font-semibold", isBestPrice ? "text-green-600 dark:text-green-400 text-lg" : "text-foreground")}>
+                                  ${(item.unitCost).toFixed(2)}
+                                </div>
+                              </div>
+
+                              {/* Hover Actions */}
+                              <div className="mt-3 hidden group-hover:flex items-center gap-2">
+                                <Button size="sm" variant={isBestPrice ? "default" : "outline"} className="w-full text-xs h-8">
+                                  <ShoppingCart className="h-3 w-3 mr-1" /> Add to Order
+                                </Button>
+                              </div>
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </div>

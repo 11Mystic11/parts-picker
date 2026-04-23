@@ -17,6 +17,7 @@ type SupplierConfig = {
   orielly?: { apiKey: string; accountNumber: string; storeId?: string };
   worldpac?: { username: string; password: string; warehouseId?: string };
   partstech?: { apiKey: string; shopId: string };
+  nexpart?: { username: string; password?: string };
 };
 
 export function getSupplierAdapter(
@@ -52,6 +53,10 @@ export function getSupplierAdapter(
     case "PARTSTECH": {
       const { getPartsTechAdapter } = require("./partstech");
       return getPartsTechAdapter(config.partstech ?? { apiKey: "", shopId: "" });
+    }
+    case "NEXPART": {
+      const { getNexpartAdapter } = require("./nexpart");
+      return getNexpartAdapter(config.nexpart ?? { username: "" });
     }
     default:
       return getMockAdapter();

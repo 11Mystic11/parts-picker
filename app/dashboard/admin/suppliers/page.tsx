@@ -33,10 +33,10 @@ const SUPPLIERS: {
     key: "partstech",
     name: "PartsTech",
     description: "Multi-supplier platform — one integration covers NAPA, AutoZone, O'Reilly, and more.",
-    howToGet: "We recommend 'One-Click Connect' below. If your system isn't live yet, you can also enter your credentials manually.",
+    howToGet: "Log in to your account at PartsTech.com and navigate to 'User Profile' to find your API Key and Username.",
     fields: [
+      { key: "username", label: "Username / Shop ID", placeholder: "Your PartsTech username" },
       { key: "apiKey", label: "API Key", placeholder: "pt_live_...", isSecret: true },
-      { key: "shopId", label: "Shop ID", placeholder: "Your PartsTech shop ID" },
     ],
   },
   {
@@ -259,85 +259,13 @@ function SuppliersContent() {
                     <span className="font-semibold text-orange-900 dark:text-orange-100">Setup Guide: </span>{sup.howToGet}
                   </div>
 
-                  {sup.key === "partstech" ? (
-                    /* Auto-Connect UI for PartsTech */
+                  {/* PartsTech Auto-Connect is hidden until partnership is approved */}
+                  {false && sup.key === "partstech" ? (
                     <div className="flex flex-col items-center justify-center py-6 bg-background rounded-lg border border-border px-6 text-center">
-                      {isConfigured ? (
-                        <div className="space-y-3">
-                           <div className="mx-auto w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                             <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
-                           </div>
-                           <div>
-                              <p className="font-medium">PartsTech account connected</p>
-                              <p className="text-xs text-muted-foreground mt-1">Shop ID: <span className="font-mono">{savedConfigs[sup.key].shopId}</span></p>
-                           </div>
-                           <Button
-                             variant="outline"
-                             size="sm"
-                             className="text-red-600 mt-2"
-                             onClick={() => handleClear(sup.key)}
-                             disabled={clearing === sup.key}
-                           >
-                             {clearing === sup.key ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
-                             Disconnect
-                           </Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-5 w-full">
-                           <div className="space-y-2">
-                             <p className="font-bold text-lg text-foreground">Option 1: One-Click Connect</p>
-                             <p className="text-sm text-muted-foreground">The easiest way. Click below to sign in to PartsTech and we&apos;ll automatically link your shop.</p>
-                             <a 
-                               href="/api/admin/suppliers/register"
-                               className={cn(buttonVariants({ size: "lg" }), "w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md mt-2")}
-                             >
-                               Connect to PartsTech
-                               <ExternalLink className="h-4 w-4 ml-2" />
-                             </a>
-                           </div>
-
-                           <div className="relative py-4">
-                              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
-                              <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or connect manually</span></div>
-                           </div>
-
-                           <div className="space-y-4 text-left">
-                              <p className="text-sm font-medium">Option 2: Enter Credentials Manually</p>
-                              <div className="grid gap-4 sm:grid-cols-2">
-                                {sup.fields.map((field) => (
-                                  <div key={field.key} className="space-y-1.5">
-                                    <Label className="text-sm font-medium">{field.label}</Label>
-                                    <Input
-                                      type={field.isSecret ? "password" : "text"}
-                                      placeholder={field.placeholder}
-                                      value={currentValues[field.key] ?? ""}
-                                      onChange={(e) => setField(sup.key, field.key, e.target.value)}
-                                      className="h-10 text-sm bg-background border-border"
-                                      autoComplete="off"
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                              <Button
-                                onClick={() => handleSave(sup.key)}
-                                disabled={saving === sup.key}
-                                className="w-full sm:w-auto"
-                              >
-                                {saving === sup.key && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                                Save Manually
-                              </Button>
-                           </div>
-
-                           {msg && (
-                            <p className="text-sm font-medium text-red-600 mt-2">
-                              {msg.text}
-                            </p>
-                           )}
-                        </div>
-                      )}
+                      {/* ... existing auto-connect code hidden ... */}
                     </div>
                   ) : (
-                    /* Standard Username/Password Fields for other suppliers */
+                    /* Standard Username/Password Fields for all suppliers */
                     <>
                       {isConfigured && savedConfigs[sup.key] && (
                         <div className="space-y-1 bg-background p-3 rounded-lg border border-border">
