@@ -5,10 +5,11 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { ShoppingCart, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight, Trash2, ExternalLink } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 // ─── Supplier definitions ──────────────────────────────────────────────────────
 
@@ -286,12 +287,13 @@ function SuppliersContent() {
                            <div className="space-y-2">
                              <p className="font-bold text-lg text-foreground">Option 1: One-Click Connect</p>
                              <p className="text-sm text-muted-foreground">The easiest way. Click below to sign in to PartsTech and we&apos;ll automatically link your shop.</p>
-                             <Button asChild size="lg" className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md mt-2">
-                                <a href="/api/admin/suppliers/register">
-                                  Connect to PartsTech
-                                  <ExternalLink className="h-4 w-4 ml-2" />
-                                </a>
-                             </Button>
+                             <a 
+                               href="/api/admin/suppliers/register"
+                               className={cn(buttonVariants({ size: "lg" }), "w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md mt-2")}
+                             >
+                               Connect to PartsTech
+                               <ExternalLink className="h-4 w-4 ml-2" />
+                             </a>
                            </div>
 
                            <div className="relative py-4">
